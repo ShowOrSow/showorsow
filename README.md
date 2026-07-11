@@ -1,7 +1,13 @@
-# ShowOrSow 🎟️
+<p align="center">
+  <img src="web/public/brand/logo-mark.png" alt="ShowOrSow — a golden ticket with a seed sprouting at the perforation line" width="140">
+</p>
 
-**Privacy-preserving escrow for real-world event commitments on Canton.**
-Stake to RSVP. Show up and get it back. Ghosts fund the people who came.
+<h1 align="center">ShowOrSow</h1>
+
+<p align="center"><b>Privacy-preserving escrow for real-world event commitments on Canton.</b><br>
+Stake to RSVP. Show up and get it back. Ghosts fund the people who came.</p>
+
+> The logo is the pitch: your stake is a **seed**, planted below the ticket's perforation line the moment you RSVP. Show up — you harvest it back, plus a share of the pot. Ghost — your seed still grows, **but the people who came harvest it.**
 
 ![Canton](https://img.shields.io/badge/Canton_Network-Daml_3.4-E4B34A) ![Go](https://img.shields.io/badge/backend-Go_1.25-00ADD8) ![Next.js](https://img.shields.io/badge/web-Next.js_15-black) ![TypeScript](https://img.shields.io/badge/indexer-TypeScript-3178C6) ![HackCanton S2](https://img.shields.io/badge/HackCanton_S2-RWA_%26_Business_Workflows-5BBF8A)
 

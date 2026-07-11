@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { PersonaSwitcher } from "./PersonaSwitcher";
 import { BalancePill } from "./BalancePill";
 import { StaleBadge } from "./StaleBadge";
@@ -11,6 +12,14 @@ export function Header() {
     <header className="sticky top-0 z-30 border-b border-line bg-ink/90 backdrop-blur">
       <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3">
         <Link href="/events" className="flex items-center gap-2">
+          <Image
+            src="/brand/logo-mark.png"
+            alt=""
+            width={28}
+            height={28}
+            className="rounded-md"
+            priority
+          />
           <span className="text-lg font-bold tracking-tight">
             Show<span className="text-gold">or</span>Sow
           </span>
