@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -110,9 +111,16 @@ func Load(envPath string) (*Config, error) {
 		Realm: os.Getenv("KEYCLOAK_REALM"),
 	}
 
-	// Session secret (HMAC). Falls back to a dev constant with a warning-worthy
-	// default; the demo-grade session cookie is deliberate & documented (05 §2).
+	// Session secret (HMAC). The dev-constant fallback is ONLY tolerable in a
+	// dev/demo environment: anyone knowing it can mint a valid session cookie
+	// for any user id. Fail closed outside dev (DEV_QUICK_LOGIN unset).
 	sec := getenvDefault("SESSION_SECRET", "showorsow-dev-session-secret-change-me")
+	if sec == "showorsow-dev-session-secret-change-me" {
+		if os.Getenv("DEV_QUICK_LOGIN") != "true" {
+			return nil, fmt.Errorf("SESSION_SECRET must be set (the built-in default is a full auth bypass outside dev; set DEV_QUICK_LOGIN=true only for local demos)")
+		}
+		log.Printf("WARNING: SESSION_SECRET is the built-in dev default — demo use only")
+	}
 	c.SessionSecret = []byte(sec)
 
 	// appOperator ledger-auth credentials (JWT_APPOPERATOR static token, or the

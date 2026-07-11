@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 
@@ -109,7 +110,10 @@ func (m *Manager) register(ctx context.Context, email, password, name string, is
 	if err != nil {
 		if isUniqueViolation(err) {
 			// Lost a race on email (party_id collision is astronomically unlikely
-			// given the random suffix).
+			// given the random suffix). The party allocated above is orphaned —
+			// ACCEPTED by design: parties are free to allocate and an unreferenced
+			// party is inert (no funds, no contracts, no user row points at it).
+			log.Printf("users: register race on %s — orphaned party %s (inert, accepted)", email, party)
 			return nil, ErrEmailTaken
 		}
 		return nil, fmt.Errorf("insert user: %w", err)

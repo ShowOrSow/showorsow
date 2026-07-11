@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -275,11 +276,17 @@ func logErrorID(errorID, stage string, err error) {
 	log.Printf("errorId=%s stage=%s err=%v", errorID, stage, err)
 }
 
-// withCORS is a permissive CORS wrapper (demo scale; same-origin in prod).
+// withCORS allows credentialed requests from the configured web origin only
+// (WEB_ORIGIN env, default the local dev server) — reflect-any-origin with
+// credentials is a session-theft pattern the review gate flagged.
 func withCORS(next http.Handler) http.Handler {
+	allowed := os.Getenv("WEB_ORIGIN")
+	if allowed == "" {
+		allowed = "http://localhost:3000"
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" {
+		if origin == allowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Set("Vary", "Origin")
