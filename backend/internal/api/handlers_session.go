@@ -2,46 +2,119 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
-	"strings"
 
 	"github.com/showorsow/backend/internal/settle"
+	"github.com/showorsow/backend/internal/users"
 )
 
-// POST /api/session — {persona} → {persona, partyId}. Sets the signed cookie.
-func (s *Server) handleSessionPost(w http.ResponseWriter, r *http.Request) {
+// userView is the public user shape returned by auth + session endpoints
+// (08 §1: AccountMenu shows name, email, truncated party id).
+type userView struct {
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	PartyID string `json:"partyId"`
+}
+
+func toUserView(u *users.User) userView {
+	return userView{Email: u.Email, Name: u.DisplayName, PartyID: u.PartyID}
+}
+
+// POST /api/auth/register — {email, password, name} → session cookie + {user}.
+// Allocates the user's Canton party and inserts the users row (05 §2).
+func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Persona string `json:"persona"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
+		Name     string `json:"name"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	// Normalize the persona to lowercase before signing: personas.Party and the
-	// well-known OrganizerPersona/AppOperatorPersona are lowercase, so a
-	// mixed-case "Organizer" must not be stored verbatim or later
-	// `persona == cfg.OrganizerPersona` checks silently fail (F11).
-	persona := strings.ToLower(req.Persona)
-	party, ok := s.personas.Party(persona)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "unknown persona")
+	u, err := s.users.Register(ctx(r), req.Email, req.Password, req.Name)
+	if errors.Is(err, users.ErrEmailTaken) {
+		writeJSON(w, http.StatusConflict, errBody{Error: "email already registered", Stage: "user"})
 		return
 	}
-	s.setSessionCookie(w, persona)
-	writeJSON(w, http.StatusOK, map[string]string{"persona": persona, "partyId": party})
+	if err != nil {
+		// Party allocation / DB failure. Party allocation is a ledger op, so
+		// surface it as a 502 with a searchable errorId.
+		writeErr502(w, "register", "", err)
+		return
+	}
+	s.setSessionCookie(w, u.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"user": toUserView(u)})
 }
 
-// GET /api/session — → {persona, partyId, indexerLagMs}. Lag is proxied from the
-// indexer healthz (feeds the StaleBadge, 05 §2).
+// POST /api/auth/login — {email, password} → session cookie + {user}.
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	u, err := s.users.Authenticate(ctx(r), req.Email, req.Password)
+	if errors.Is(err, users.ErrInvalidCredentials) {
+		writeJSON(w, http.StatusUnauthorized, errBody{Error: "invalid email or password", Stage: "auth"})
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.setSessionCookie(w, u.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"user": toUserView(u)})
+}
+
+// POST /api/auth/logout — clears the session cookie → 204.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	s.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/auth/dev-login — {email} → session cookie + {user}. Seeded demo
+// accounts ONLY, and only when DEV_QUICK_LOGIN=true (demo-speed login, off in
+// anything shared, 05 §2).
+func (s *Server) handleDevLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.cfg.DevQuickLogin {
+		writeErr(w, http.StatusForbidden, "dev quick-login is disabled")
+		return
+	}
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	u, err := s.users.DevLogin(ctx(r), req.Email)
+	if errors.Is(err, users.ErrNotFound) || errors.Is(err, users.ErrNotDemo) {
+		writeJSON(w, http.StatusUnauthorized, errBody{Error: "not a demo account", Stage: "auth"})
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.setSessionCookie(w, u.ID)
+	writeJSON(w, http.StatusOK, map[string]any{"user": toUserView(u)})
+}
+
+// GET /api/session — → {user:{email, name, partyId}, indexerLagMs}. Lag feeds
+// the StaleBadge (05 §2). Unauthenticated → uniform 401 {stage:'auth'}.
 func (s *Server) handleSessionGet(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"persona":      persona,
-		"partyId":      party,
+		"user":         toUserView(u),
 		"indexerLagMs": s.indexerLagMs(r),
 	})
 }
@@ -73,6 +146,14 @@ func (s *Server) indexerLagMs(r *http.Request) int64 {
 		return -1
 	}
 	return hz.LagMs
+}
+
+// GET /api/config — unauthenticated probe → {devQuickLogin: boolean}. The
+// /login page reads this pre-session (GET /api/session 401s before login, so
+// the flag can't ride on it) to show/hide the demo quick-login strip (05 §2,
+// contract pinned with the web build). No session required by design.
+func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{"devQuickLogin": s.cfg.DevQuickLogin})
 }
 
 // GET /api/tokens — configured tokens + live decimals from registry metadata.
@@ -121,10 +202,10 @@ func (s *Server) decimalsForToken(r *http.Request, label, admin, instrumentID st
 	return d
 }
 
-// GET /api/balances — [{instrumentId, amount}] for the current persona (live
-// Holding interface query, under the persona's own JWT).
+// GET /api/balances — [{instrumentId, amount}] for the logged-in user (live
+// Holding interface query as the user's own party).
 func (s *Server) handleBalances(w http.ResponseWriter, r *http.Request) {
-	_, party, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
@@ -134,7 +215,7 @@ func (s *Server) handleBalances(w http.ResponseWriter, r *http.Request) {
 	}
 	out := make([]bal, 0, len(s.cfg.Tokens))
 	for _, t := range s.cfg.Tokens {
-		sum, err := settle.HoldingSum(ctx(r), s.ledger, party, t.AdminParty, t.InstrumentID)
+		sum, err := settle.HoldingSum(ctx(r), s.ledger, u.PartyID, t.AdminParty, t.InstrumentID)
 		if err != nil {
 			logErrorID(newErrorID(), "balances-holding", err)
 			sum = "0"

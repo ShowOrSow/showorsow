@@ -23,13 +23,14 @@ type createEventReq struct {
 }
 
 // POST /api/events — mints eventId, derives settleBefore = eventEnd +
-// SETTLE_BUFFER, writes event_meta, then EventProposal + EP_Accept.
+// SETTLE_BUFFER, writes event_meta, then EventProposal + EP_Accept. The
+// organizer is simply the logged-in user (their party owns the event).
 func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
-	persona, organizerParty, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
-	_ = persona
+	organizerParty := u.PartyID
 
 	var req createEventReq
 	if err := decodeBody(r, &req); err != nil {
@@ -56,8 +57,8 @@ func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 
 	eventID := newEventID()
 
-	appOperatorParty, ok := s.personas.Party(s.cfg.AppOperatorPersona)
-	if !ok {
+	appOperatorParty := s.cfg.AppOperatorParty
+	if appOperatorParty == "" {
 		writeErr(w, http.StatusInternalServerError, "appOperator not configured")
 		return
 	}
@@ -163,21 +164,17 @@ func toMetaView(e *store.EventRow) metaView {
 	return metaView{Description: e.Description, Venue: e.Venue, ImageURL: e.ImageURL}
 }
 
-// GET /api/events — read model, persona-scoped. Organizer: their own events;
-// attendee: only events where they hold an rsvps row (07 §3).
+// GET /api/events — read model, user-scoped (07 §3). A user sees events they
+// organize (organizer_party = their party) plus events where they hold an rsvps
+// row. myStatus is set for any event where they have an RSVP.
 func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	party := u.PartyID
 
-	var rows []store.EventRow
-	var err error
-	if persona == s.cfg.OrganizerPersona {
-		rows, err = s.store.ListEventsForOrganizer(ctx(r), party)
-	} else {
-		rows, err = s.store.ListEventsForAttendee(ctx(r), party)
-	}
+	rows, err := s.store.ListEventsForUser(ctx(r), party)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -192,10 +189,10 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 	for i := range rows {
 		e := &rows[i]
 		it := item{Event: toEventView(e), Meta: toMetaView(e)}
-		if persona != s.cfg.OrganizerPersona {
-			if rsvp, err := s.store.GetRSVP(ctx(r), e.EventID, party); err == nil {
-				it.MyStatus = rsvp.Status
-			}
+		// myStatus reflects the user's own RSVP where one exists (an organizer
+		// viewing their own event usually has none).
+		if rsvp, err := s.store.GetRSVP(ctx(r), e.EventID, party); err == nil {
+			it.MyStatus = rsvp.Status
 		}
 		out = append(out, it)
 	}
@@ -206,10 +203,11 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 //   - organizer → {event, meta, stats, rsvps:[...]}
 //   - attendee  → {event, meta, myRsvp:{...}}
 func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	party := u.PartyID
 	eventID := r.PathValue("eventId")
 
 	ev, err := s.store.GetEvent(ctx(r), eventID)
@@ -222,8 +220,8 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Organizer view (either the organizer persona or the event owner).
-	if persona == s.cfg.OrganizerPersona || party == ev.OrganizerParty {
+	// Organizer view — the logged-in user owns the event.
+	if party == ev.OrganizerParty {
 		stats, err := s.store.GetEventStats(ctx(r), eventID)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
@@ -234,9 +232,12 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		// Row shape pinned with the web build (05 §2 / 08 §2): the invitee's real
+		// name + email drive the row, {attendeeParty} drives the check-in POST.
 		type rsvpOut struct {
-			AttendeeLabel string `json:"attendeeLabel"`
 			AttendeeParty string `json:"attendeeParty"`
+			AttendeeName  string `json:"attendeeName"`
+			AttendeeEmail string `json:"attendeeEmail"`
 			Status        string `json:"status"`
 			CheckedIn     bool   `json:"checkedIn"`
 			RSVPCid       string `json:"rsvpCid"`
@@ -244,9 +245,17 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 		}
 		rout := make([]rsvpOut, 0, len(rsvps))
 		for _, rv := range rsvps {
+			// Resolve the invitee's account for name + email. slotId is the
+			// invitee's email by construction (handleInvite), so it is the email
+			// fallback when the account lookup misses.
+			name, email := "", rv.SlotID
+			if acct, err := s.users.GetByParty(ctx(r), rv.AttendeeParty); err == nil {
+				name, email = acct.DisplayName, acct.Email
+			}
 			rout = append(rout, rsvpOut{
-				AttendeeLabel: s.labelForParty(rv.AttendeeParty),
 				AttendeeParty: rv.AttendeeParty,
+				AttendeeName:  name,
+				AttendeeEmail: email,
 				Status:        rv.Status,
 				CheckedIn:     rv.CheckedIn,
 				RSVPCid:       rv.RSVPCID,
@@ -292,12 +301,4 @@ func (s *Server) handleGetEvent(w http.ResponseWriter, r *http.Request) {
 			"slotId":    rsvp.SlotID,
 		},
 	})
-}
-
-// labelForParty maps a party id back to a persona label for display.
-func (s *Server) labelForParty(party string) string {
-	if p, ok := s.cfg.PersonaByParty(party); ok {
-		return p.Name
-	}
-	return party
 }

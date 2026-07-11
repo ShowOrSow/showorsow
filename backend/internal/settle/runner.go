@@ -10,7 +10,6 @@ import (
 
 	"github.com/showorsow/backend/internal/config"
 	"github.com/showorsow/backend/internal/ledger"
-	"github.com/showorsow/backend/internal/personas"
 	"github.com/showorsow/backend/internal/registry"
 	"github.com/showorsow/backend/internal/store"
 )
@@ -19,14 +18,20 @@ import (
 type Deps struct {
 	Cfg       *config.Config
 	Ledger    *ledger.Client
-	Personas  *personas.Manager
 	Store     *store.Store
 	Pkg       ledger.PackageQualifier
 	NewIDFunc func() string // unique command-id generator
+	// AppOperatorParty is the app's own party — it holds the pot, records
+	// allocations, settles, and pays out (05 §2). Under the real-accounts model
+	// it is the only party the backend carries a ledger token for.
+	AppOperatorParty string
 	// Registry returns a registry client for a given (admin, instrumentId).
 	Registry func(admin, instrumentID string) (*registry.Client, error)
 	// Errorf logs a structured error with a searchable errorId.
 	Errorf func(errorID, stage string, err error)
+	// Label maps a party id to its owner's display name (settlement/close
+	// response labels). Best-effort — falls back to the party id.
+	Label func(ctx context.Context, party string) string
 }
 
 // StakedItem is a staked RSVP participating in settlement.
@@ -81,10 +86,9 @@ func NewRunner(d Deps) *Runner { return &Runner{d: d} }
 // pre-flight → before-snapshots → EndEventEarly → contexts → CloseEvent
 // (primary or sequential fallback) → payouts → after-snapshots → MarkSettled.
 func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResult, error) {
-	op := r.d.Cfg.AppOperatorPersona
-	opParty, ok := r.d.Personas.Party(op)
-	if !ok {
-		return nil, fmt.Errorf("appOperator persona %q not configured", op)
+	opParty := r.d.AppOperatorParty
+	if opParty == "" {
+		return nil, fmt.Errorf("appOperator party not configured")
 	}
 	orgParty := ev.OrganizerParty
 
@@ -138,7 +142,7 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 			outcome = "refund"
 		}
 		res.Settlements = append(res.Settlements, SettlementEntry{
-			AttendeeLabel: r.labelFor(it.AttendeeParty),
+			AttendeeLabel: r.labelFor(ctx, it.AttendeeParty),
 			SlotID:        it.SlotID,
 			Outcome:       outcome,
 			Amount:        ev.StakeAmount,
@@ -171,18 +175,18 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 	deltas, err := r.d.Store.GetBalanceDeltas(ctx, ev.EventID)
 	if err == nil {
 		for _, dRow := range deltas {
-			res.Deltas = append(res.Deltas, DeltaEntry{Party: r.labelFor(dRow.Party), Before: dRow.Before, After: dRow.After})
+			res.Deltas = append(res.Deltas, DeltaEntry{Party: r.labelFor(ctx, dRow.Party), Before: dRow.Before, After: dRow.After})
 		}
 	}
 
 	return res, nil
 }
 
-// labelFor maps a Canton party id back to its persona label (e.g. "alice") for
-// the settlement/close response. Falls back to the raw party id if unconfigured.
-func (r *Runner) labelFor(party string) string {
-	if p, ok := r.d.Cfg.PersonaByParty(party); ok {
-		return p.Name
+// labelFor maps a Canton party id back to its owner's display name for the
+// settlement/close response. Falls back to the raw party id if unknown.
+func (r *Runner) labelFor(ctx context.Context, party string) string {
+	if r.d.Label != nil {
+		return r.d.Label(ctx, party)
 	}
 	return party
 }

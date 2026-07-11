@@ -12,46 +12,46 @@ import (
 	"github.com/showorsow/backend/internal/ledger"
 	"github.com/showorsow/backend/internal/settle"
 	"github.com/showorsow/backend/internal/store"
+	"github.com/showorsow/backend/internal/users"
 )
 
-// POST /api/events/{eventId}/invites — {attendeePersona} → refreshed rsvp row.
-// Ledger: Event.InviteAttendee (04 §1.2).
+// POST /api/events/{eventId}/invites — {email} → refreshed rsvp row.
+// Organizer-only (403 otherwise). The invitee must already have an account —
+// a party must exist to be invited (MVP), so an unknown email → 404
+// {stage:'user'}. Ledger: Event.InviteAttendee (04 §1.2).
 func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
-	persona, organizerParty, ok := s.requirePersona(w, r)
+	eventID := r.PathValue("eventId")
+	_, ev, ok := s.requireOrganizer(w, r, eventID)
 	if !ok {
 		return
 	}
-	_ = persona
-	eventID := r.PathValue("eventId")
+	organizerParty := ev.OrganizerParty
 
 	var req struct {
-		AttendeePersona string `json:"attendeePersona"`
-		SlotID          string `json:"slotId"`
+		Email string `json:"email"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	attendeeParty, ok := s.personas.Party(req.AttendeePersona)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "unknown attendeePersona")
-		return
-	}
 
-	ev, err := s.store.GetEvent(ctx(r), eventID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "event not found")
+	invitee, err := s.users.GetByEmail(ctx(r), req.Email)
+	if errors.Is(err, users.ErrNotFound) {
+		writeJSON(w, http.StatusNotFound, errBody{
+			Error:  "no account",
+			Stage:  "user",
+			Detail: "no account with that email — ask them to sign up",
+		})
 		return
 	}
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	slotID := req.SlotID
-	if slotID == "" {
-		slotID = req.AttendeePersona // default slot = persona label
-	}
+	attendeeParty := invitee.PartyID
+	// slotId identifies the RSVP slot on-ledger; the invitee's email is a stable
+	// unique key per event.
+	slotID := invitee.Email
 
 	arg, _ := json.Marshal(map[string]any{"attendee": attendeeParty, "slotId": slotID})
 	_, err = s.ledger.SubmitAndWait(ctx(r), organizerParty, "invite-"+newID(),
@@ -74,10 +74,11 @@ func (s *Server) handleInvite(w http.ResponseWriter, r *http.Request) {
 //	| 409 {stage:'balance'}                       (pre-check fails)
 //	| 502 {stage:'allocate', errorId, rsvpCid}    (steps 3–5 fail)
 func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
-	_, attendeeParty, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	attendeeParty := u.PartyID
 	inviteCid := r.PathValue("inviteCid")
 
 	// Resolve the invite → event + slot (read model).
@@ -147,10 +148,11 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 // POST /api/rsvps/{rsvpCid}/stake — retry endpoint: re-runs §3 steps 3–6 for an
 // RSVP stuck in 'accepted' (partial-failure recovery).
 func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
-	_, attendeeParty, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	attendeeParty := u.PartyID
 	rsvpCid := r.PathValue("rsvpCid")
 
 	rv, err := s.store.GetRSVPByCid(ctx(r), rsvpCid)
@@ -197,7 +199,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 	// §3.3 AllocationFactoryDiscovery + Allocate ChoiceContext. The allocation
 	// spec is derived from the StakedRSVP's AllocationRequest view: single leg
 	// (attendee → pot, stakeAmount, instrument), settlementRef eventId/slotId.
-	appOperatorParty, _ := s.personas.Party(s.cfg.AppOperatorPersona)
+	appOperatorParty := s.cfg.AppOperatorParty
 	settlementRefID := ev.EventID + "/" + slotID
 	requestedAt := time.Now().UTC().Format(time.RFC3339Nano)
 
@@ -334,10 +336,11 @@ func (s *Server) pollAllocation(ctx context.Context, opParty, settlementRefID st
 
 // POST /api/invites/{inviteCid}/decline — DeclineRSVP (04 §1.3).
 func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
-	_, attendeeParty, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	attendeeParty := u.PartyID
 	inviteCid := r.PathValue("inviteCid")
 	rv, err := s.store.GetRSVPByInviteCid(ctx(r), inviteCid)
 	if errors.Is(err, store.ErrNotFound) {
@@ -369,10 +372,11 @@ func (s *Server) handleDecline(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/rsvps/{rsvpCid}/cancel — CancelRSVP (+ cancel ChoiceContext, 04 §1.4).
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
-	_, attendeeParty, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	attendeeParty := u.PartyID
 	rsvpCid := r.PathValue("rsvpCid")
 	rv, err := s.store.GetRSVPByCid(ctx(r), rsvpCid)
 	if errors.Is(err, store.ErrNotFound) {
@@ -429,44 +433,31 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	s.respondRSVP(w, r, rv.EventID, attendeeParty)
 }
 
-// POST /api/events/{eventId}/checkin — {attendeePersona}. One-way; a repeat call
-// maps the 'not checkedIn' assert failure to 200 no-op (05 §2).
+// POST /api/events/{eventId}/checkin — {attendeeParty}. Organizer-only (403
+// otherwise). One-way; a repeat call maps the 'not checkedIn' assert failure to
+// a 200 no-op (05 §2).
 func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
+	eventID := r.PathValue("eventId")
+	// Organizer guard first (F1): without it any authenticated user could flip
+	// an RSVP to checked-in and convert a slash into a refund + payout share.
+	_, ev, ok := s.requireOrganizer(w, r, eventID)
 	if !ok {
 		return
 	}
-	eventID := r.PathValue("eventId")
 
 	var req struct {
-		AttendeePersona string `json:"attendeePersona"`
+		AttendeeParty string `json:"attendeeParty"`
 	}
 	if err := decodeBody(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid body")
 		return
 	}
-	attendeeParty, ok := s.personas.Party(req.AttendeePersona)
-	if !ok {
-		writeErr(w, http.StatusBadRequest, "unknown attendeePersona")
+	attendeeParty := req.AttendeeParty
+	if attendeeParty == "" {
+		writeErr(w, http.StatusBadRequest, "attendeeParty is required")
 		return
 	}
 
-	ev, err := s.store.GetEvent(ctx(r), eventID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "event not found")
-		return
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	// Only the organizer (or the event owner) may check attendees in. Without
-	// this guard any authenticated persona could flip their own RSVP to
-	// checked-in and convert a slash into a refund + payout share (F1).
-	if persona != s.cfg.OrganizerPersona && party != ev.OrganizerParty {
-		writeErr(w, http.StatusForbidden, "only the organizer may check attendees in")
-		return
-	}
 	rv, err := s.store.GetRSVP(ctx(r), eventID, attendeeParty)
 	if errors.Is(err, store.ErrNotFound) {
 		writeErr(w, http.StatusNotFound, "rsvp not found")
@@ -504,25 +495,11 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 	s.respondRSVP(w, r, eventID, attendeeParty)
 }
 
-// POST /api/events/{eventId}/close — runs §4 → §5 → §6.
+// POST /api/events/{eventId}/close — runs §4 → §5 → §6. Organizer-only.
 func (s *Server) handleClose(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
-	if !ok {
-		return
-	}
 	eventID := r.PathValue("eventId")
-	ev, err := s.store.GetEvent(ctx(r), eventID)
-	if errors.Is(err, store.ErrNotFound) {
-		writeErr(w, http.StatusNotFound, "event not found")
-		return
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	// Only the organizer (or organizer persona) may close.
-	if persona != s.cfg.OrganizerPersona && party != ev.OrganizerParty {
-		writeErr(w, http.StatusForbidden, "only the organizer may close the event")
+	_, ev, ok := s.requireOrganizer(w, r, eventID)
+	if !ok {
 		return
 	}
 
@@ -535,14 +512,15 @@ func (s *Server) handleClose(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/events/{eventId}/settlement — settlements ⋈ payouts ⋈ snapshots.
-// Persona-scoped (architect pin): the organizer persona (or event owner) sees
-// ALL rows; an attendee persona sees ONLY their own settlement/payout/delta row.
-// Every `party`/`attendeeLabel` field is the PERSONA LABEL, never the party id.
+// User-scoped: the event's organizer sees ALL rows; an attendee sees ONLY their
+// own settlement/payout/delta row (mirrors ledger visibility). Every
+// `party`/`attendeeLabel` field is the owner's display NAME, never the party id.
 func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
-	persona, party, ok := s.requirePersona(w, r)
+	u, ok := s.requireUser(w, r)
 	if !ok {
 		return
 	}
+	party := u.PartyID
 	eventID := r.PathValue("eventId")
 
 	ev, err := s.store.GetEvent(ctx(r), eventID)
@@ -554,7 +532,7 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	isOrganizer := persona == s.cfg.OrganizerPersona || party == ev.OrganizerParty
+	isOrganizer := party == ev.OrganizerParty
 
 	rows, err := s.store.GetSettlementPackage(ctx(r), eventID)
 	if err != nil {
@@ -586,21 +564,21 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 		Payouts     []payoutEntry     `json:"payouts"`
 		Deltas      []deltaEntry      `json:"deltas"`
 	}{}
-	// An attendee only sees the row bearing their own persona label.
-	mine := func(label string) bool { return isOrganizer || strings.EqualFold(label, persona) }
+	// An attendee only sees the row for their own party.
+	mine := func(rowParty string) bool { return isOrganizer || rowParty == party }
 	for _, rrow := range rows {
-		label := s.labelForParty(rrow.AttendeeParty)
-		if !mine(label) {
+		if !mine(rrow.AttendeeParty) {
 			continue
 		}
+		label := s.labelForParty(ctx(r), rrow.AttendeeParty)
 		out.Settlements = append(out.Settlements, settlementEntry{AttendeeLabel: label, Outcome: rrow.Outcome, Amount: rrow.Amount})
 		if rrow.PayoutAmount != "" && rrow.PayoutAmount != "0" {
 			out.Payouts = append(out.Payouts, payoutEntry{Party: label, Amount: rrow.PayoutAmount})
 		}
 	}
 	for _, d := range deltas {
-		label := s.labelForParty(d.Party)
-		if !mine(label) {
+		label := s.labelForParty(ctx(r), d.Party)
+		if !mine(d.Party) {
 			continue
 		}
 		out.Deltas = append(out.Deltas, deltaEntry{Party: label, Before: d.Before, After: d.After})

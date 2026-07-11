@@ -30,16 +30,15 @@ type KeycloakConfig struct {
 	Realm string
 }
 
-// Persona binds a persona name to its ledger party plus the credentials the
-// personas module needs to obtain a Bearer JWT.
-type Persona struct {
-	Name string
-	// PartyID is the fully-qualified Canton party id.
-	PartyID string
+// AppOperatorAuth carries the ledger-auth credentials for the app's own
+// party (appOperator). Under the Luma-style real-accounts model (pivot Jul 11)
+// this is the ONLY party the backend holds a token for: registered users'
+// per-party JWTs are a documented DevNet MVP limitation (05 §2). On the
+// unauthenticated sandbox every field is blank and no Authorization is sent.
+type AppOperatorAuth struct {
 	// StaticJWT, if set, is used verbatim (sandbox / pre-minted token).
 	StaticJWT string
-	// Keycloak password-grant credentials (LocalNet/DevNet). ClientID/Secret
-	// may be shared; Username/Password identify the party's user.
+	// Keycloak password-grant credentials (LocalNet/DevNet).
 	ClientID string
 	Secret   string
 	Username string
@@ -54,21 +53,25 @@ type Config struct {
 	NeonDatabaseURL  string
 	SettleBuffer     time.Duration
 	Tokens           []TokenConfig
-	Personas         map[string]Persona // keyed by persona name
 	Keycloak         KeycloakConfig
 	SessionSecret    []byte // HMAC key for the signed session cookie
 	// SequentialSettle selects the R6 fallback: CloseEvent once per RSVP with a
 	// single-item settleItems list instead of one atomic exercise.
 	SequentialSettle bool
 
-	// AppOperator / Organizer well-known persona names used by the runners.
-	AppOperatorPersona string
-	OrganizerPersona   string
-}
+	// AppOperatorParty is the app's own Canton party (env PARTY_APPOPERATOR).
+	// It is NOT a user — registered users own their own parties, allocated at
+	// signup (05 §2). AppOperator carries the ledger-write token.
+	AppOperatorParty string
+	AppOperator      AppOperatorAuth
 
-// personaNames is the fixed demo roster. PARTY_<UPPER(name)> + persona JWT/
-// Keycloak vars are read for each.
-var personaNames = []string{"organizer", "appoperator", "attendee1", "attendee2", "attendee3"}
+	// DevQuickLogin gates POST /api/auth/dev-login (seeded demo accounts only —
+	// demo-speed login, off in anything shared).
+	DevQuickLogin bool
+	// SeedDemoUsers, when true, idempotently ensures the 4 demo accounts exist
+	// at startup (Organizer/Alice/Bob/Charlie).
+	SeedDemoUsers bool
+}
 
 // Load reads .env (if present) into the environment, then parses Config.
 func Load(envPath string) (*Config, error) {
@@ -77,14 +80,14 @@ func Load(envPath string) (*Config, error) {
 	}
 
 	c := &Config{
-		ListenAddr:         getenvDefault("LISTEN_ADDR", ":8080"),
-		LedgerJSONAPIURL:   strings.TrimRight(os.Getenv("LEDGER_JSON_API_URL"), "/"),
-		IndexerHealthURL:   strings.TrimRight(getenvDefault("INDEXER_HEALTH_URL", ""), "/"),
-		NeonDatabaseURL:    os.Getenv("NEON_DATABASE_URL"),
-		Personas:           map[string]Persona{},
-		AppOperatorPersona: getenvDefault("APP_OPERATOR_PERSONA", "appoperator"),
-		OrganizerPersona:   getenvDefault("ORGANIZER_PERSONA", "organizer"),
-		SequentialSettle:   parseBool(os.Getenv("SETTLE_SEQUENTIAL_FALLBACK")),
+		ListenAddr:       getenvDefault("LISTEN_ADDR", ":8080"),
+		LedgerJSONAPIURL: strings.TrimRight(os.Getenv("LEDGER_JSON_API_URL"), "/"),
+		IndexerHealthURL: strings.TrimRight(getenvDefault("INDEXER_HEALTH_URL", ""), "/"),
+		NeonDatabaseURL:  os.Getenv("NEON_DATABASE_URL"),
+		AppOperatorParty: os.Getenv("PARTY_APPOPERATOR"),
+		SequentialSettle: parseBool(os.Getenv("SETTLE_SEQUENTIAL_FALLBACK")),
+		DevQuickLogin:    parseBool(os.Getenv("DEV_QUICK_LOGIN")),
+		SeedDemoUsers:    parseBool(os.Getenv("SEED_DEMO_USERS")),
 	}
 
 	// SETTLE_BUFFER default 24h.
@@ -108,42 +111,22 @@ func Load(envPath string) (*Config, error) {
 	}
 
 	// Session secret (HMAC). Falls back to a dev constant with a warning-worthy
-	// default; the demo-grade auth is deliberate & documented (05 §2).
+	// default; the demo-grade session cookie is deliberate & documented (05 §2).
 	sec := getenvDefault("SESSION_SECRET", "showorsow-dev-session-secret-change-me")
 	c.SessionSecret = []byte(sec)
 
-	// Personas.
-	for _, name := range personaNames {
-		up := strings.ToUpper(name)
-		party := os.Getenv("PARTY_" + up)
-		if party == "" {
-			// Skip personas without a configured party — allows partial config
-			// during local bring-up. Handlers validate presence at request time.
-			continue
-		}
-		p := Persona{
-			Name:      name,
-			PartyID:   party,
-			StaticJWT: os.Getenv("JWT_" + up),
-			ClientID:  getenvDefault("KEYCLOAK_CLIENT_ID_"+up, os.Getenv("KEYCLOAK_CLIENT_ID")),
-			Secret:    getenvDefault("KEYCLOAK_CLIENT_SECRET_"+up, os.Getenv("KEYCLOAK_CLIENT_SECRET")),
-			Username:  getenvDefault("KEYCLOAK_USERNAME_"+up, ""),
-			Password:  getenvDefault("KEYCLOAK_PASSWORD_"+up, ""),
-		}
-		c.Personas[name] = p
+	// appOperator ledger-auth credentials (JWT_APPOPERATOR static token, or the
+	// Keycloak password grant on LocalNet/DevNet). Per-user JWTs are out of
+	// scope (05 §2) — only appOperator carries a write token.
+	c.AppOperator = AppOperatorAuth{
+		StaticJWT: os.Getenv("JWT_APPOPERATOR"),
+		ClientID:  getenvDefault("KEYCLOAK_CLIENT_ID_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_ID")),
+		Secret:    getenvDefault("KEYCLOAK_CLIENT_SECRET_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_SECRET")),
+		Username:  getenvDefault("KEYCLOAK_USERNAME_APPOPERATOR", ""),
+		Password:  getenvDefault("KEYCLOAK_PASSWORD_APPOPERATOR", ""),
 	}
 
 	return c, nil
-}
-
-// PersonaByParty returns the persona owning a given party id, if configured.
-func (c *Config) PersonaByParty(party string) (Persona, bool) {
-	for _, p := range c.Personas {
-		if p.PartyID == party {
-			return p, true
-		}
-	}
-	return Persona{}, false
 }
 
 // TokenByLabel resolves a configured token by its label.

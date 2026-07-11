@@ -138,7 +138,7 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 	transferCid, _ := resp.CreatedByInterface("Splice.Api.Token.TransferInstructionV1:TransferInstruction")
 	if transferCid == "" {
 		// One-step transfer (auto-completed) — no instruction to accept.
-		return PayoutEntry{RecipientParty: r.labelFor(it.AttendeeParty), Amount: amount, TransferCid: ""}, nil
+		return PayoutEntry{RecipientParty: r.labelFor(ctx, it.AttendeeParty), Amount: amount, TransferCid: ""}, nil
 	}
 
 	// Two-step: auto-TransferInstruction_Accept as the recipient persona.
@@ -147,7 +147,7 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 		// The offer exists even if accept failed; the recipient can retry.
 	}
 
-	return PayoutEntry{RecipientParty: r.labelFor(it.AttendeeParty), Amount: amount, TransferCid: transferCid}, nil
+	return PayoutEntry{RecipientParty: r.labelFor(ctx, it.AttendeeParty), Amount: amount, TransferCid: transferCid}, nil
 }
 
 // acceptTransfer auto-accepts a pending payout TransferInstruction as the

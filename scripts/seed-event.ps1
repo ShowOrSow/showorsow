@@ -27,7 +27,8 @@ param(
   [string]$ApiUrl = $(if ($env:NEXT_PUBLIC_API_URL) { $env:NEXT_PUBLIC_API_URL } else { "http://localhost:8080" }),
   [string]$TokenLabel = "cBTC",
   [string]$StakeAmount = "0.01",
-  [string[]]$Attendees = @("attendee1", "attendee2", "attendee3"),
+  [string]$OrganizerEmail = "organizer@showorsow.dev",
+  [string[]]$Attendees = @("alice@showorsow.dev", "bob@showorsow.dev", "charlie@showorsow.dev"),
   [int]$RsvpDeadlineHours = 24,
   [int]$EventEndHours = 48
 )
@@ -35,7 +36,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ApiUrl = $ApiUrl.TrimEnd("/")
 
-# Shared web session so the signed persona cookie carries across calls.
+# Shared web session so the signed session cookie carries across calls.
 $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
 
 function Invoke-Api {
@@ -72,10 +73,13 @@ function Invoke-Api {
 
 Write-Host "==> ShowOrSow seed against $ApiUrl" -ForegroundColor Cyan
 
-# 1) Become the organizer (sets the signed session cookie).
-Write-Host "  - POST /api/session (organizer)"
-$sess = Invoke-Api -Method POST -Path "/api/session" -Body @{ persona = "organizer" }
-Write-Host "    organizer party: $($sess.partyId)"
+# 1) Log in as the seeded organizer via dev quick-login (real-accounts auth,
+#    pivot Jul 11 — replaces the old persona session). Requires DEV_QUICK_LOGIN=true
+#    and SEED_DEMO_USERS having seeded organizer@showorsow.dev. Sets the signed
+#    session cookie on $session.
+Write-Host "  - POST /api/auth/dev-login ($OrganizerEmail)"
+$sess = Invoke-Api -Method POST -Path "/api/auth/dev-login" -Body @{ email = $OrganizerEmail }
+Write-Host "    organizer party: $($sess.user.partyId)"
 
 # 2) Create the event. Backend mints eventId and derives settleBefore.
 $now = [DateTimeOffset]::UtcNow
@@ -97,10 +101,11 @@ $created = Invoke-Api -Method POST -Path "/api/events" -Body $eventBody
 $eventId = $created.eventId
 Write-Host "    eventId: $eventId" -ForegroundColor Green
 
-# 3) Invite each attendee (organizer session).
+# 3) Invite each attendee by email (organizer session). The invitee must already
+#    have an account — seeded demo accounts satisfy this (SEED_DEMO_USERS).
 foreach ($a in $Attendees) {
   Write-Host "  - POST /api/events/$eventId/invites ($a)"
-  $inv = Invoke-Api -Method POST -Path "/api/events/$eventId/invites" -Body @{ attendeePersona = $a; slotId = $a }
+  $inv = Invoke-Api -Method POST -Path "/api/events/$eventId/invites" -Body @{ email = $a }
   Write-Host "    invited $a -> status=$($inv.status) inviteCid=$($inv.inviteCid)"
 }
 

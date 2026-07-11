@@ -1,6 +1,8 @@
-// Package api holds the HTTP handlers for the 13 REST endpoints (05 §2). It
-// owns the stdlib net/http mux, the demo-grade session cookie, and wires the
-// ledger/registry/store/personas collaborators plus the settlement runners.
+// Package api holds the HTTP handlers for the REST API (05 §2). It owns the
+// stdlib net/http mux, the HMAC session cookie carrying the logged-in user id,
+// and wires the ledger/registry/store/users collaborators plus the settlement
+// runners. Auth is Luma-style real accounts (pivot Jul 11): every user owns a
+// Canton party allocated at signup — the persona switcher is gone.
 package api
 
 import (
@@ -8,6 +10,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -16,22 +19,50 @@ import (
 
 	"github.com/showorsow/backend/internal/config"
 	"github.com/showorsow/backend/internal/ledger"
-	"github.com/showorsow/backend/internal/personas"
 	"github.com/showorsow/backend/internal/registry"
 	"github.com/showorsow/backend/internal/settle"
 	"github.com/showorsow/backend/internal/store"
+	"github.com/showorsow/backend/internal/users"
 )
+
+// dataStore is the read-model surface the handlers use. *store.Store satisfies
+// it; tests inject a fake (organizer-guard table test).
+type dataStore interface {
+	WriteEventMeta(ctx context.Context, m store.EventMeta) error
+	GetEvent(ctx context.Context, eventID string) (*store.EventRow, error)
+	ListEventsForUser(ctx context.Context, party string) ([]store.EventRow, error)
+	GetRSVP(ctx context.Context, eventID, attendeeParty string) (*store.RSVPRow, error)
+	GetRSVPByCid(ctx context.Context, rsvpCid string) (*store.RSVPRow, error)
+	GetRSVPByInviteCid(ctx context.Context, inviteCid string) (*store.RSVPRow, error)
+	ListRSVPsForEvent(ctx context.Context, eventID string) ([]store.RSVPRow, error)
+	GetEventStats(ctx context.Context, eventID string) (*store.EventStats, error)
+	GetSettlementPackage(ctx context.Context, eventID string) ([]store.SettlementRow, error)
+	GetBalanceDeltas(ctx context.Context, eventID string) ([]store.BalanceDeltaRow, error)
+}
+
+// userStore is the account surface the handlers use. *users.Manager satisfies
+// it; tests inject a fake.
+type userStore interface {
+	Register(ctx context.Context, email, password, name string) (*users.User, error)
+	Authenticate(ctx context.Context, email, password string) (*users.User, error)
+	DevLogin(ctx context.Context, email string) (*users.User, error)
+	GetByID(ctx context.Context, id int64) (*users.User, error)
+	GetByEmail(ctx context.Context, email string) (*users.User, error)
+	GetByParty(ctx context.Context, party string) (*users.User, error)
+	DisplayNameForParty(ctx context.Context, party string) string
+}
 
 // Server bundles all dependencies behind the HTTP handlers.
 type Server struct {
-	cfg      *config.Config
-	ledger   *ledger.Client
-	personas *personas.Manager
-	store    *store.Store
-	pkg      ledger.PackageQualifier
-	httpc    *http.Client
+	cfg    *config.Config
+	ledger *ledger.Client
+	users  userStore
+	store  dataStore
+	pkg    ledger.PackageQualifier
+	httpc  *http.Client
 
-	runner *settle.Runner
+	runner     *settle.Runner
+	settleDeps settle.Deps
 
 	// registry clients cached per (admin,instrumentId).
 	regMu   sync.Mutex
@@ -42,44 +73,39 @@ type Server struct {
 	decCache map[string]int
 }
 
-// New builds a Server and its settlement runner.
-func New(cfg *config.Config, lc *ledger.Client, pm *personas.Manager, st *store.Store, pkg ledger.PackageQualifier) *Server {
+// New builds a Server and its settlement runner. st/um are the concrete
+// collaborators; they are also handed to the settlement runner (which needs the
+// concrete store for balance-snapshot writes) and exposed to handlers behind
+// the dataStore/userStore interfaces.
+func New(cfg *config.Config, lc *ledger.Client, um *users.Manager, st *store.Store, pkg ledger.PackageQualifier) *Server {
 	s := &Server{
 		cfg:      cfg,
 		ledger:   lc,
-		personas: pm,
+		users:    um,
 		store:    st,
 		pkg:      pkg,
 		httpc:    &http.Client{Timeout: 30 * time.Second},
 		regByID:  map[string]*registry.Client{},
 		decCache: map[string]int{},
 	}
-	s.runner = settle.NewRunner(settle.Deps{
-		Cfg:       cfg,
-		Ledger:    lc,
-		Personas:  pm,
-		Store:     st,
-		Pkg:       pkg,
-		NewIDFunc: newID,
-		Registry:  s.registryFor,
-		Errorf:    logErrorID,
-	})
+	s.settleDeps = settle.Deps{
+		Cfg:              cfg,
+		Ledger:           lc,
+		Store:            st,
+		Pkg:              pkg,
+		NewIDFunc:        newID,
+		Registry:         s.registryFor,
+		Errorf:           logErrorID,
+		AppOperatorParty: cfg.AppOperatorParty,
+		Label:            um.DisplayNameForParty,
+	}
+	s.runner = settle.NewRunner(s.settleDeps)
 	return s
 }
 
-// Runner exposes the settlement runner (used by main for the watcher Deps).
-func (s *Server) SettleDeps() settle.Deps {
-	return settle.Deps{
-		Cfg:       s.cfg,
-		Ledger:    s.ledger,
-		Personas:  s.personas,
-		Store:     s.store,
-		Pkg:       s.pkg,
-		NewIDFunc: newID,
-		Registry:  s.registryFor,
-		Errorf:    logErrorID,
-	}
-}
+// SettleDeps exposes the settlement dependency bundle (used by main for the
+// withdrawal watcher).
+func (s *Server) SettleDeps() settle.Deps { return s.settleDeps }
 
 // registryFor returns (creating if needed) a registry client for a token,
 // resolved by (admin, instrumentId).
@@ -103,9 +129,17 @@ func (s *Server) registryFor(admin, instrumentID string) (*registry.Client, erro
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Session
-	mux.HandleFunc("POST /api/session", s.handleSessionPost)
+	// Auth (Luma-style real accounts, 05 §2).
+	mux.HandleFunc("POST /api/auth/register", s.handleRegister)
+	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/auth/dev-login", s.handleDevLogin)
 	mux.HandleFunc("GET /api/session", s.handleSessionGet)
+
+	// Unauthenticated config probe — the /login page reads it PRE-session to
+	// decide whether to show the demo quick-login strip (05 §2, contract pinned
+	// with the web build Jul 11). Must NOT require a session.
+	mux.HandleFunc("GET /api/config", s.handleConfig)
 
 	// Tokens & balances
 	mux.HandleFunc("GET /api/tokens", s.handleTokens)
@@ -138,7 +172,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // errBody is the standard error envelope. stage/errorId are populated for
-// ledger/registry failures (05 §2).
+// ledger/registry failures (05 §2); stage:'auth' marks an unauthenticated call.
 type errBody struct {
 	Error   string `json:"error"`
 	Stage   string `json:"stage,omitempty"`
@@ -165,19 +199,57 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, errBody{Error: msg})
 }
 
-// requirePersona resolves the active persona and its party, or writes 401.
-func (s *Server) requirePersona(w http.ResponseWriter, r *http.Request) (persona, party string, ok bool) {
-	persona, ok = s.currentPersona(r)
+// writeAuthErr writes the uniform 401 {stage:'auth'} for unauthenticated API
+// calls (05 §2 — the frontend redirects to /login on this).
+func writeAuthErr(w http.ResponseWriter) {
+	writeJSON(w, http.StatusUnauthorized, errBody{Error: "unauthenticated", Stage: "auth"})
+}
+
+// requireUser resolves the logged-in user from the session cookie, or writes a
+// uniform 401 {stage:'auth'}.
+func (s *Server) requireUser(w http.ResponseWriter, r *http.Request) (*users.User, bool) {
+	uid, ok := s.currentUserID(r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "no active session")
-		return "", "", false
+		writeAuthErr(w)
+		return nil, false
 	}
-	party, ok = s.personas.Party(persona)
+	u, err := s.users.GetByID(ctx(r), uid)
+	if err != nil {
+		// Stale/tampered cookie or deleted account → treat as unauthenticated.
+		writeAuthErr(w)
+		return nil, false
+	}
+	return u, true
+}
+
+// requireOrganizer resolves the session user AND the event, enforcing that the
+// user is the event's organizer (session party == events.organizer_party).
+// Organizer-only actions — invites, checkin, close — call this; a non-organizer
+// gets 403 (05 §2 / task item 3). Returns before any ledger write on failure.
+func (s *Server) requireOrganizer(w http.ResponseWriter, r *http.Request, eventID string) (*users.User, *store.EventRow, bool) {
+	u, ok := s.requireUser(w, r)
 	if !ok {
-		writeErr(w, http.StatusUnauthorized, "unknown persona")
-		return "", "", false
+		return nil, nil, false
 	}
-	return persona, party, true
+	ev, err := s.store.GetEvent(ctx(r), eventID)
+	if errors.Is(err, store.ErrNotFound) {
+		writeErr(w, http.StatusNotFound, "event not found")
+		return nil, nil, false
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return nil, nil, false
+	}
+	if u.PartyID != ev.OrganizerParty {
+		writeErr(w, http.StatusForbidden, "only the organizer may perform this action")
+		return nil, nil, false
+	}
+	return u, ev, true
+}
+
+// labelForParty maps a party id to its owner's display name for UI responses.
+func (s *Server) labelForParty(ctx context.Context, party string) string {
+	return s.users.DisplayNameForParty(ctx, party)
 }
 
 func decodeBody(r *http.Request, v any) error {

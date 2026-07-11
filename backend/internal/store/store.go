@@ -32,6 +32,10 @@ func New(ctx context.Context, dsn string) (*Store, error) {
 // Close releases the pool.
 func (s *Store) Close() { s.pool.Close() }
 
+// Pool exposes the underlying pgx pool so the users package (07 §2 backend
+// writer of the `users` table) can share this single connection pool.
+func (s *Store) Pool() *pgxpool.Pool { return s.pool }
+
 // Ping verifies connectivity.
 func (s *Store) Ping(ctx context.Context) error { return s.pool.Ping(ctx) }
 
@@ -162,6 +166,29 @@ func (s *Store) ListEventsForAttendee(ctx context.Context, attendeeParty string)
 		JOIN rsvps r ON r.event_id = e.event_id AND r.attendee_party = $1
 		LEFT JOIN event_meta m ON m.event_id = e.event_id
 		ORDER BY e.event_end`, attendeeParty)
+	if err != nil {
+		return nil, err
+	}
+	return scanEventRows(rows)
+}
+
+// ListEventsForUser returns every event a user can see: events they organize
+// (organizer_party = their party) UNION events where they hold an rsvps row
+// (07 §3). Under real accounts a single user is both an organizer of their own
+// events and an attendee of others, so the list is the union. Ordered by
+// event_end.
+func (s *Store) ListEventsForUser(ctx context.Context, party string) ([]EventRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.event_id, e.contract_id, e.organizer_party, e.title,
+		       e.stake_amount::text, e.instrument_admin, e.instrument_id,
+		       e.rsvp_deadline, e.event_end, e.settle_before, e.status::text,
+		       COALESCE(m.description,''), COALESCE(m.venue,''), COALESCE(m.image_url,'')
+		FROM events e
+		LEFT JOIN event_meta m ON m.event_id = e.event_id
+		WHERE e.organizer_party = $1
+		   OR EXISTS (SELECT 1 FROM rsvps r
+		              WHERE r.event_id = e.event_id AND r.attendee_party = $1)
+		ORDER BY e.event_end`, party)
 	if err != nil {
 		return nil, err
 	}

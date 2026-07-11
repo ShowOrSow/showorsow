@@ -1,7 +1,8 @@
 // Command server is the ShowOrSow Go backend entrypoint. It is the only
 // component that writes to the ledger (05 §1): it wires the JSON Ledger API v2
-// client, the registry clients, the Neon store, the persona JWT manager, the
-// HTTP handlers, and the 10s withdrawal watcher.
+// client, the registry clients, the Neon store, the appOperator token source,
+// the users account layer (Luma-style real accounts), the HTTP handlers, and
+// the 10s withdrawal watcher.
 package main
 
 import (
@@ -14,11 +15,12 @@ import (
 	"time"
 
 	"github.com/showorsow/backend/internal/api"
+	"github.com/showorsow/backend/internal/appauth"
 	"github.com/showorsow/backend/internal/config"
 	"github.com/showorsow/backend/internal/ledger"
-	"github.com/showorsow/backend/internal/personas"
 	"github.com/showorsow/backend/internal/settle"
 	"github.com/showorsow/backend/internal/store"
+	"github.com/showorsow/backend/internal/users"
 )
 
 func main() {
@@ -54,12 +56,31 @@ func main() {
 	}
 	pingCancel()
 
-	// Personas + ledger client (personas is the TokenSource for the ledger).
+	// appOperator token source + ledger client. Under the Luma-style
+	// real-accounts model the backend holds a ledger token ONLY for appOperator;
+	// registered users act unauthenticated on sandbox/LocalNet (per-user DevNet
+	// JWTs are a documented MVP limitation, 05 §2).
 	httpc := &http.Client{Timeout: 60 * time.Second}
-	pm := personas.New(cfg, httpc)
-	lc := ledger.New(cfg.LedgerJSONAPIURL, pm, httpc)
+	tok := appauth.New(cfg, httpc)
+	lc := ledger.New(cfg.LedgerJSONAPIURL, tok, httpc)
 	if sync := os.Getenv("SYNCHRONIZER_ID"); sync != "" {
 		lc = lc.WithSynchronizer(sync)
+	}
+
+	// Users: account CRUD + signup party allocation (the ledger client is the
+	// party allocator; appOperator authorises /v2/parties).
+	um := users.New(st.Pool(), lc, cfg.AppOperatorParty)
+
+	// Idempotent demo seeding (SEED_DEMO_USERS): ensure the 4 demo accounts
+	// exist, allocating a party per account on first creation (05 §2).
+	if cfg.SeedDemoUsers {
+		seedCtx, seedCancel := context.WithTimeout(rootCtx, 60*time.Second)
+		if err := um.EnsureDemoUsers(seedCtx); err != nil {
+			log.Printf("warning: demo seeding failed: %v", err)
+		} else {
+			log.Printf("demo users ensured (%d accounts)", len(users.DemoAccounts))
+		}
+		seedCancel()
 	}
 
 	// Package qualifier for our own templates (DevNet-reset resilient via the
@@ -67,7 +88,7 @@ func main() {
 	pkg := ledger.PackageQualifier(os.Getenv("SHOWOROSOW_PACKAGE_ID"))
 
 	// API server.
-	srv := api.New(cfg, lc, pm, st, pkg)
+	srv := api.New(cfg, lc, um, st, pkg)
 
 	// Withdrawal watcher (05 §7) — 10s tick, its own goroutine.
 	watcher := settle.NewWatcher(srv.SettleDeps())

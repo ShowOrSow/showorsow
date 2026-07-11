@@ -38,8 +38,8 @@ func (w *Watcher) Run(ctx context.Context) {
 
 // sweep runs one pass. Errors are logged, never fatal — the next tick retries.
 func (w *Watcher) sweep(ctx context.Context) {
-	opParty, ok := w.d.Personas.Party(w.d.Cfg.AppOperatorPersona)
-	if !ok {
+	opParty := w.d.AppOperatorParty
+	if opParty == "" {
 		return
 	}
 	cands, err := w.d.Store.ListWithdrawalCandidates(ctx)
