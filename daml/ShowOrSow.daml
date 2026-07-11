@@ -1,0 +1,360 @@
+-- | ShowOrSow — non-custodial event-RSVP staking on Canton via CIP-56 Allocations.
+--
+-- Design authority (see plan/02-architecture.md §3, §4 and plan/04-smart-contract.md §1):
+--   * `appOperator` is a SIGNATORY of `Event` (not just an observer) so that Event
+--     choices can create the two-signatory `RSVPInvite`. Observers grant no authority.
+--   * `StakedRSVP` is signed by all three of attendee/organizer/appOperator so that its
+--     `Settle` choice can exercise the CIP-56 `Allocation_ExecuteTransfer` / `Allocation_Cancel`
+--     choices, whose controllers are [executor, sender, receiver]. Authority for those
+--     consequences flows from StakedRSVP's signatories (the OTCTrade pattern).
+--   * Attendees NEVER appear in any field/observer of `Event` — the privacy invariant.
+--   * No contract keys (Canton 3.x): cross-contract reads fetch a ContractId passed as
+--     a choice argument (hence the `currentEventCid` / `allocCid` arguments).
+module ShowOrSow where
+
+import qualified DA.TextMap as TextMap
+import DA.Foldable (mapA_)
+
+import Splice.Api.Token.MetadataV1 (ExtraArgs, ChoiceExecutionMetadata(..), emptyMetadata)
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+import Splice.Api.Token.AllocationV1
+  ( Allocation
+  , AllocationView(..)
+  , AllocationSpecification(..)
+  , SettlementInfo(..)
+  , Reference(..)
+  , TransferLeg(..)
+  , Allocation_ExecuteTransfer(..)
+  , Allocation_Cancel(..)
+  )
+-- Unqualified import: the interface-instance block below must define the interface
+-- methods `allocationRequest_RejectImpl` / `allocationRequest_WithdrawImpl`, which are
+-- exported as top-level identifiers (NOT covered by `AllocationRequest(..)`). A bare
+-- import brings them, plus AllocationRequestView and the choice arg records, into scope.
+import Splice.Api.Token.AllocationRequestV1
+
+-- ---------------------------------------------------------------------------
+-- 1.1  EventProposal — propose/accept bootstrap so appOperator co-signs Event.
+-- ---------------------------------------------------------------------------
+template EventProposal
+  with
+    organizer : Party
+    appOperator : Party
+    eventId : Text
+    title : Text
+    stakeAmount : Decimal
+    instrumentAdmin : Party
+    instrumentId : Text
+    rsvpDeadline : Time
+    eventEnd : Time
+    settleBefore : Time
+  where
+    signatory organizer
+    observer appOperator
+
+    -- appOperator accepts → the two-signatory Event comes into existence.
+    -- Authority for the create: controller appOperator + signatory organizer = both Event sigs.
+    choice EP_Accept : ContractId Event
+      controller appOperator
+      do
+        create Event with
+          organizer
+          appOperator
+          eventId
+          title
+          stakeAmount
+          instrumentAdmin
+          instrumentId
+          rsvpDeadline
+          eventEnd
+          settleBefore
+          ended = False
+
+    choice EP_Cancel : ()
+      controller organizer
+      do pure ()
+
+-- ---------------------------------------------------------------------------
+-- 1.2  Event — signed by organizer + appOperator; NO attendee anywhere.
+-- ---------------------------------------------------------------------------
+template Event
+  with
+    organizer : Party
+    appOperator : Party
+    eventId : Text
+    title : Text
+    stakeAmount : Decimal
+    instrumentAdmin : Party
+    instrumentId : Text
+    rsvpDeadline : Time
+    eventEnd : Time
+    settleBefore : Time
+    ended : Bool
+  where
+    signatory organizer, appOperator
+    -- observer: none (privacy — attendees must never be Event informees).
+
+    -- Create a per-attendee invite. Nonconsuming so many invites issue from one Event.
+    nonconsuming choice InviteAttendee : ContractId RSVPInvite
+      with
+        attendee : Party
+        slotId : Text
+      controller organizer
+      do
+        now <- getTime
+        assertMsg "RSVP deadline has passed" (now < rsvpDeadline)
+        assertMsg "Event has already ended" (not ended)
+        create RSVPInvite with
+          organizer
+          appOperator
+          attendee
+          slotId
+          eventId
+          stakeAmount
+          instrumentAdmin
+          instrumentId
+          rsvpDeadline
+          eventEnd
+          settleBefore
+
+    -- Demo gate: end the event early. Recreate with ended = True (the Event cid changes;
+    -- indexer E2 refreshes the read model's contract_id so later choices get the live cid).
+    choice EndEventEarly : ContractId Event
+      controller organizer
+      do
+        assertMsg "Event has already ended" (not ended)
+        create this with ended = True
+
+    -- PRIMARY settlement path: nonconsuming so settlement is retryable and MarkSettled
+    -- stays the single archive point. `self` is the live Event cid handed to each Settle.
+    -- Privacy holds because attendees are never Event observers (a consuming choice on an
+    -- attendee-observed contract would leak siblings; this one is not observed by attendees).
+    nonconsuming choice CloseEvent : ()
+      with
+        settleItems : [(ContractId StakedRSVP, ExtraArgs)]
+      controller appOperator
+      do
+        now <- getTime
+        assertMsg "Event not yet ended and eventEnd not reached"
+          (ended || now >= eventEnd)
+        mapA_ (\(rsvpCid, extraArgs) ->
+                 exercise rsvpCid Settle with currentEventCid = self, extraArgs)
+              settleItems
+
+    -- Archive the Event. Backend MUST call this strictly AFTER settlement succeeds
+    -- (see plan/05-backend.md §4); early call strands unsettled RSVPs.
+    choice MarkSettled : ()
+      controller appOperator
+      do
+        now <- getTime
+        assertMsg "Event not yet ended and eventEnd not reached"
+          (ended || now >= eventEnd)
+        pure ()
+
+-- ---------------------------------------------------------------------------
+-- 1.3  RSVPInvite — organizer+appOperator signed; attendee observes.
+-- ---------------------------------------------------------------------------
+template RSVPInvite
+  with
+    organizer : Party
+    appOperator : Party
+    attendee : Party
+    slotId : Text
+    eventId : Text
+    stakeAmount : Decimal
+    instrumentAdmin : Party
+    instrumentId : Text
+    rsvpDeadline : Time
+    eventEnd : Time
+    settleBefore : Time
+  where
+    signatory organizer, appOperator
+    observer attendee
+
+    -- attendee accepts → StakedRSVP (all three signatories). Fetch of the current Event
+    -- cid re-validates that the event is live and matches; fetch authority is fine because
+    -- organizer+appOperator (who sign this invite) are Event stakeholders, and the Event
+    -- holds no attendee data (no privacy impact).
+    choice AcceptRSVP : ContractId StakedRSVP
+      with
+        currentEventCid : ContractId Event
+      controller attendee
+      do
+        now <- getTime
+        assertMsg "RSVP deadline has passed" (now < rsvpDeadline)
+        ev <- fetch currentEventCid
+        assertMsg "Event id mismatch" (ev.eventId == eventId)
+        assertMsg "Event has already ended" (not ev.ended)
+        createdAt <- getTime
+        create StakedRSVP with
+          organizer
+          appOperator
+          attendee
+          eventId
+          slotId
+          stakeAmount
+          instrumentAdmin
+          instrumentId
+          rsvpDeadline
+          eventEnd
+          settleBefore
+          createdAt
+          allocationCid = None
+          checkedIn = False
+          withdrawn = False
+
+    choice DeclineRSVP : ()
+      controller attendee
+      do pure ()
+
+    choice RevokeInvite : ()
+      controller organizer
+      do pure ()
+
+-- ---------------------------------------------------------------------------
+-- 1.4  StakedRSVP — the core contract; implements interface AllocationRequest.
+-- ---------------------------------------------------------------------------
+template StakedRSVP
+  with
+    organizer : Party
+    appOperator : Party
+    attendee : Party
+    eventId : Text
+    slotId : Text
+    stakeAmount : Decimal
+    instrumentAdmin : Party
+    instrumentId : Text
+    rsvpDeadline : Time
+    eventEnd : Time
+    settleBefore : Time
+    createdAt : Time
+    allocationCid : Optional (ContractId Allocation)
+    checkedIn : Bool
+    withdrawn : Bool
+  where
+    -- All three REQUIRED: Settle exercises allocation choices controlled by
+    -- [executor, sender, receiver]; authority comes from these signatories.
+    signatory attendee, organizer, appOperator
+
+    -- Record the attendee's freshly-created allocation onto the RSVP, after validating
+    -- it against this RSVP's expected leg (the OTCTrade validation pattern) — prevents a
+    -- wrong-money allocation from ever being recorded.
+    choice RecordAllocation : ContractId StakedRSVP
+      with
+        allocCid : ContractId Allocation
+      controller appOperator
+      do
+        assertMsg "Allocation already recorded" (allocationCid == None)
+        v <- view <$> fetch allocCid
+        let spec = v.allocation
+        assertMsg "Executor mismatch"
+          (spec.settlement.executor == appOperator)
+        assertMsg "Settlement ref mismatch"
+          (spec.settlement.settlementRef.id == eventId <> "/" <> slotId)
+        assertMsg "Leg sender mismatch"
+          (spec.transferLeg.sender == attendee)
+        assertMsg "Leg receiver mismatch"
+          (spec.transferLeg.receiver == appOperator)
+        assertMsg "Leg amount mismatch"
+          (spec.transferLeg.amount == stakeAmount)
+        assertMsg "Instrument mismatch"
+          (spec.transferLeg.instrumentId == InstrumentId with admin = instrumentAdmin, id = instrumentId)
+        create this with allocationCid = Some allocCid
+
+    -- Organizer checks the attendee in. One-way (no UndoCheckIn); idempotency assert makes
+    -- a double-click safe. Fetch of the live Event re-validates it is the right, live event.
+    choice CheckIn : ContractId StakedRSVP
+      with
+        currentEventCid : ContractId Event
+      controller organizer
+      do
+        assertMsg "Already checked in" (not checkedIn)
+        assertMsg "No allocation recorded" (allocationCid /= None)
+        assertMsg "RSVP already withdrawn" (not withdrawn)
+        ev <- fetch currentEventCid
+        assertMsg "Event id mismatch" (ev.eventId == eventId)
+        assertMsg "Event has already ended" (not ev.ended)
+        create this with checkedIn = True
+
+    -- Settle one RSVP. checkedIn → Cancel (refund); no-show → ExecuteTransfer (slash → pot).
+    -- Called from CloseEvent with currentEventCid = the Event's `self`.
+    choice Settle : ()
+      with
+        currentEventCid : ContractId Event
+        extraArgs : ExtraArgs
+      controller appOperator
+      do
+        now <- getTime
+        ev <- fetch currentEventCid
+        assertMsg "Event id mismatch" (ev.eventId == eventId)
+        assertMsg "Event not ended and eventEnd not reached"
+          (ev.ended || now >= eventEnd)
+        assertMsg "Settlement window has closed" (now < settleBefore)
+        case allocationCid of
+          None -> abort "No allocation to settle"
+          Some cid ->
+            if checkedIn
+              then do
+                _ <- exercise cid Allocation_Cancel with extraArgs
+                pure ()
+              else do
+                _ <- exercise cid Allocation_ExecuteTransfer with extraArgs
+                pure ()
+
+    -- Attendee cancels their own RSVP before the deadline; releases the allocation.
+    choice CancelRSVP : ()
+      with
+        extraArgs : ExtraArgs
+      controller attendee
+      do
+        now <- getTime
+        assertMsg "RSVP deadline has passed" (now < rsvpDeadline)
+        case allocationCid of
+          None -> pure ()
+          Some cid -> do
+            _ <- exercise cid Allocation_Cancel with extraArgs
+            pure ()
+
+    -- The attendee withdrew their allocation registry-side (Allocation_Withdraw is
+    -- sender-alone). Deliberately NO `not checkedIn` assert: the standard lets the sender
+    -- withdraw any time pre-settlement, and a withdrawn stake voids the RSVP regardless.
+    choice MarkWithdrawn : ContractId StakedRSVP
+      controller appOperator
+      do
+        assertMsg "No allocation to withdraw" (allocationCid /= None)
+        create this with
+          withdrawn = True
+          allocationCid = None
+          checkedIn = False
+
+    -- CIP-56 AllocationRequest interface: the RSVP doubles as the allocation request the
+    -- attendee's wallet renders. One leg: attendee → appOperator (pot) for stakeAmount.
+    interface instance AllocationRequest for StakedRSVP where
+      -- MVP: both interface choices are consuming (they archive the StakedRSVP);
+      -- the indexer projects the archival as status='cancelled' (plan/06-indexer.md E16).
+      -- Our own flows never exercise these — settlement goes through `Settle`.
+      allocationRequest_RejectImpl _self _arg = pure (ChoiceExecutionMetadata with meta = emptyMetadata)
+      allocationRequest_WithdrawImpl _self _arg = pure (ChoiceExecutionMetadata with meta = emptyMetadata)
+      view = AllocationRequestView with
+        settlement = SettlementInfo with
+          executor = appOperator
+          settlementRef = Reference with
+            id = eventId <> "/" <> slotId
+            cid = None
+          requestedAt = createdAt
+          allocateBefore = rsvpDeadline
+          settleBefore
+          meta = emptyMetadata
+        transferLegs = TextMap.fromList
+          [ ( slotId
+            , TransferLeg with
+                sender = attendee
+                receiver = appOperator
+                amount = stakeAmount
+                instrumentId = InstrumentId with
+                  admin = instrumentAdmin
+                  id = instrumentId
+                meta = emptyMetadata
+            )
+          ]
+        meta = emptyMetadata

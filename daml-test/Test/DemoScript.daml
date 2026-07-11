@@ -1,0 +1,405 @@
+-- | DemoScript — the ShowOrSow test suite (plan/04-smart-contract.md §4).
+--
+-- Runs under `dpm test` with no network, using MockRegistry as a stand-in CIP-56 registry.
+-- Sections:
+--   1. happyPath        — the demo narrative: 5 parties, 3 RSVPs, 2 refunds, 1 slash.
+--   2. privacyAssertions— judge-facing structural-invisibility proofs.
+--   3. deadlineTests    — rsvpDeadline / eventEnd / settleBefore gates (static time).
+--   4. validationTests  — RecordAllocation mismatches, double check-in, cancel, withdraw.
+module Test.DemoScript where
+
+import DA.Assert ((===))
+import DA.Time (time)
+import DA.Date (date, Month(..))
+import Daml.Script
+
+import Splice.Api.Token.MetadataV1
+  ( ExtraArgs(..)
+  , emptyChoiceContext
+  , emptyMetadata
+  )
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+import Splice.Api.Token.AllocationV1
+  ( AllocationSpecification(..)
+  , SettlementInfo(..)
+  , Reference(..)
+  , TransferLeg(..)
+  )
+
+import ShowOrSow
+import MockRegistry
+
+-- ---------------------------------------------------------------------------
+-- Helpers
+-- ---------------------------------------------------------------------------
+
+noArgs : ExtraArgs
+noArgs = ExtraArgs with context = emptyChoiceContext, meta = emptyMetadata
+
+-- Fixed wall-clock reference points for the deterministic time tests.
+t0 : Time
+t0 = time (date 2026 Jul 10) 9 0 0     -- setup / RSVP window open
+
+tRsvpDeadline : Time
+tRsvpDeadline = time (date 2026 Jul 10) 12 0 0
+
+tEventEnd : Time
+tEventEnd = time (date 2026 Jul 10) 18 0 0
+
+tSettleBefore : Time
+tSettleBefore = time (date 2026 Jul 10) 20 0 0
+
+data World = World with
+  organizer : Party
+  appOperator : Party
+  admin : Party
+  attendee1 : Party
+  attendee2 : Party
+  attendee3 : Party
+  factory : ContractId MockAllocationFactory
+
+-- Allocate all parties + the mock registry factory, at time t0.
+setupWorld : Script World
+setupWorld = do
+  setTime t0
+  organizer  <- allocateParty "organizer"
+  appOperator <- allocateParty "appOperator"
+  admin      <- allocateParty "instrumentAdmin"
+  attendee1  <- allocateParty "attendee1"
+  attendee2  <- allocateParty "attendee2"
+  attendee3  <- allocateParty "attendee3"
+  factory <- submit admin do
+    createCmd MockAllocationFactory with
+      admin
+      senders = [attendee1, attendee2, attendee3]
+  pure World with ..
+
+-- Create Event via the propose/accept bootstrap.
+makeEvent : World -> Script (ContractId Event)
+makeEvent World{..} = do
+  propCid <- submit organizer do
+    createCmd EventProposal with
+      organizer
+      appOperator
+      eventId = "evt-1"
+      title = "ShowOrSow Demo"
+      stakeAmount = 10.0
+      instrumentAdmin = admin
+      instrumentId = "cBTC"
+      rsvpDeadline = tRsvpDeadline
+      eventEnd = tEventEnd
+      settleBefore = tSettleBefore
+  submit appOperator do exerciseCmd propCid EP_Accept
+
+-- Invite an attendee, accept, fund a mock holding, allocate, and record it.
+-- Returns the StakedRSVP cid with its allocation recorded.
+stakeAttendee : World -> ContractId Event -> Party -> Text -> Script (ContractId StakedRSVP)
+stakeAttendee World{..} evCid attendee slotId = do
+  inviteCid <- submit organizer do
+    exerciseCmd evCid InviteAttendee with attendee, slotId
+  -- AcceptRSVP fetches the Event inside the choice body. The attendee is not an Event
+  -- stakeholder (privacy invariant), so on the IDE ledger the read needs delegation:
+  -- `readAs appOperator` lets the submission see the Event. TESTS ONLY — in production the
+  -- backend attaches the Event as a disclosed contract on the command instead of readAs.
+  rsvpCid <- submit (actAs attendee <> readAs appOperator) do
+    exerciseCmd inviteCid AcceptRSVP with currentEventCid = evCid
+  -- Mint the attendee a holding to fund the stake.
+  holdingCid <- submit admin do
+    createCmd MockHolding with
+      admin
+      owner = attendee
+      instrId = "cBTC"
+      amount = 10.0
+  -- Build the allocation spec that matches this RSVP's leg exactly.
+  let spec = AllocationSpecification with
+        settlement = SettlementInfo with
+          executor = appOperator
+          settlementRef = Reference with id = "evt-1/" <> slotId, cid = None
+          requestedAt = t0
+          allocateBefore = tRsvpDeadline
+          settleBefore = tSettleBefore
+          meta = emptyMetadata
+        transferLegId = slotId
+        transferLeg = TransferLeg with
+          sender = attendee
+          receiver = appOperator
+          amount = 10.0
+          instrumentId = InstrumentId with admin, id = "cBTC"
+          meta = emptyMetadata
+  -- Attendee exercises the factory Allocate (mirrors AllocationFactory_Allocate).
+  allocCid <- submit attendee do
+    exerciseCmd factory Allocate with spec, holdingCid
+  -- appOperator records the validated allocation onto the RSVP.
+  submit appOperator do exerciseCmd rsvpCid RecordAllocation with allocCid = allocCid
+
+-- Query how many holdings a party owns for the pot instrument, and their total.
+potBalance : Party -> Party -> Script Decimal
+potBalance appOperator _admin = do
+  hs <- query @MockHolding appOperator
+  let mine = filter (\(_, h) -> h.owner == appOperator && h.instrId == "cBTC") hs
+  pure (sum (map (\(_, h) -> h.amount) mine))
+
+-- ---------------------------------------------------------------------------
+-- 1. Happy path = demo narrative.
+--    5 parties → EventProposal/EP_Accept → 3 invites → 3 AcceptRSVP →
+--    3 allocations + RecordAllocation → CheckIn ×2 → EndEventEarly → CloseEvent →
+--    assert 2 refunds, 1 slash into pot, pot = 1 stake (10.0).
+-- ---------------------------------------------------------------------------
+happyPath : Script ()
+happyPath = do
+  w@World{..} <- setupWorld
+  evCid <- makeEvent w
+
+  rsvp1 <- stakeAttendee w evCid attendee1 "slot-1"
+  rsvp2 <- stakeAttendee w evCid attendee2 "slot-2"
+  rsvp3 <- stakeAttendee w evCid attendee3 "slot-3"
+
+  -- attendee1 and attendee2 check in; attendee3 is a no-show.
+  rsvp1' <- submit organizer do exerciseCmd rsvp1 CheckIn with currentEventCid = evCid
+  rsvp2' <- submit organizer do exerciseCmd rsvp2 CheckIn with currentEventCid = evCid
+
+  -- Organizer ends the event early (the Event cid changes).
+  evCid' <- submit organizer do exerciseCmd evCid EndEventEarly
+
+  -- Atomic settlement: refunds for the two checked-in, slash for the no-show.
+  submit appOperator do
+    exerciseCmd evCid' CloseEvent with
+      settleItems =
+        [ (rsvp1', noArgs)
+        , (rsvp2', noArgs)
+        , (rsvp3, noArgs)
+        ]
+
+  -- Pot holds exactly one slashed stake (attendee3's 10.0). Refunds went back to
+  -- attendee1 / attendee2, not the pot.
+  pot <- potBalance appOperator admin
+  pot === 10.0
+
+  -- The two checked-in attendees each got exactly one 10.0 cBTC refund (Cancel → sender).
+  a1refunds <- query @MockHolding attendee1
+  length (filter (\(_, h) -> h.owner == attendee1 && h.instrId == "cBTC" && h.amount == 10.0) a1refunds) === 1
+  a2refunds <- query @MockHolding attendee2
+  length (filter (\(_, h) -> h.owner == attendee2 && h.instrId == "cBTC" && h.amount == 10.0) a2refunds) === 1
+  -- The no-show (attendee3) was slashed: no refund holding of their own.
+  a3holds <- query @MockHolding attendee3
+  length (filter (\(_, h) -> h.owner == attendee3 && h.instrId == "cBTC") a3holds) === 0
+
+  -- MarkSettled archives the Event after settlement.
+  submit appOperator do exerciseCmd evCid' MarkSettled
+  pure ()
+
+-- ---------------------------------------------------------------------------
+-- 2. Privacy assertions (judge-facing).
+--    attendee2 sees ONLY their own StakedRSVP; attendee2 cannot CheckIn (not a
+--    controller); attendee2 cannot see attendee1's RSVPInvite.
+-- ---------------------------------------------------------------------------
+privacyAssertions : Script ()
+privacyAssertions = do
+  w@World{..} <- setupWorld
+  evCid <- makeEvent w
+
+  -- Invite attendee1 and attendee2; accept both.
+  inv1 <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+  inv2 <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee2, slotId = "slot-2"
+
+  -- attendee2 cannot see attendee1's invite (not an observer).
+  inv2Visible <- query @RSVPInvite attendee2
+  map fst inv2Visible === [inv2]
+
+  -- readAs appOperator delegates the Event read (see stakeAttendee note; TESTS ONLY —
+  -- production uses disclosed contracts, not readAs).
+  rsvp1 <- submit (actAs attendee1 <> readAs appOperator) do exerciseCmd inv1 AcceptRSVP with currentEventCid = evCid
+  rsvp2 <- submit (actAs attendee2 <> readAs appOperator) do exerciseCmd inv2 AcceptRSVP with currentEventCid = evCid
+
+  -- attendee2's StakedRSVP query returns exactly their own (structural invisibility).
+  a2rsvps <- query @StakedRSVP attendee2
+  map fst a2rsvps === [rsvp2]
+
+  -- attendee2 cannot CheckIn (CheckIn's controller is the organizer, not the attendee).
+  submitMustFail attendee2 do exerciseCmd rsvp2 CheckIn with currentEventCid = evCid
+
+  -- attendee2 cannot exercise anything on attendee1's RSVP (not a stakeholder → cannot even fetch).
+  submitMustFail attendee2 do exerciseCmd rsvp1 CheckIn with currentEventCid = evCid
+  pure ()
+
+-- ---------------------------------------------------------------------------
+-- 3. Deadline tests (static time).
+--    (a) AcceptRSVP after rsvpDeadline fails.
+--    (b) AcceptRSVP after EndEventEarly fails (fetch-assert).
+--    (c) Settle before eventEnd without EndEventEarly fails.
+--    (d) Settle after settleBefore fails.
+-- ---------------------------------------------------------------------------
+deadlineTests : Script ()
+deadlineTests = do
+  -- (a) AcceptRSVP after rsvpDeadline fails.
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    inv <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+    setTime (time (date 2026 Jul 10) 13 0 0)  -- past rsvpDeadline (12:00)
+    -- readAs appOperator so the Event fetch is VISIBLE; failure must come from the
+    -- rsvpDeadline assert, not a contract-not-visible error (TESTS ONLY; prod discloses).
+    submitMustFail (actAs attendee1 <> readAs appOperator) do exerciseCmd inv AcceptRSVP with currentEventCid = evCid
+
+  -- (b) AcceptRSVP after EndEventEarly fails (fetch → ev.ended).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    inv <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+    evCid' <- submit organizer do exerciseCmd evCid EndEventEarly
+    -- Still before rsvpDeadline, so only the ended-assert can reject it. readAs appOperator
+    -- makes the Event fetch visible so failure comes from ev.ended (TESTS ONLY; prod discloses).
+    submitMustFail (actAs attendee1 <> readAs appOperator) do exerciseCmd inv AcceptRSVP with currentEventCid = evCid'
+
+  -- (c) Settle before eventEnd without EndEventEarly fails (gate: ended || now >= eventEnd).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp1 <- stakeAttendee w evCid attendee1 "slot-1"
+    -- Now = t0 (09:00) < eventEnd (18:00), event not ended → CloseEvent gate fails.
+    submitMustFail appOperator do
+      exerciseCmd evCid CloseEvent with settleItems = [(rsvp1, noArgs)]
+
+  -- (d) Settle after settleBefore fails (Settle asserts now < settleBefore).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp1 <- stakeAttendee w evCid attendee1 "slot-1"
+    evCid' <- submit organizer do exerciseCmd evCid EndEventEarly
+    setTime (time (date 2026 Jul 10) 21 0 0)  -- past settleBefore (20:00)
+    submitMustFail appOperator do
+      exerciseCmd evCid' CloseEvent with settleItems = [(rsvp1, noArgs)]
+  pure ()
+
+-- ---------------------------------------------------------------------------
+-- 4. Validation & edge tests.
+--    (a) RecordAllocation with mismatched amount / receiver / settlementRef fails.
+--    (b) double CheckIn fails.
+--    (c) CancelRSVP pre-deadline releases the mock allocation.
+--    (d) MarkWithdrawn after check-in succeeds (assert dropped by design).
+--    (e) CheckIn on a withdrawn RSVP fails.
+-- ---------------------------------------------------------------------------
+validationTests : Script ()
+validationTests = do
+  -- (a) mismatched-amount allocation must be rejected by RecordAllocation.
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    inv <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+    rsvp <- submit (actAs attendee1 <> readAs appOperator) do exerciseCmd inv AcceptRSVP with currentEventCid = evCid
+    -- Fund + allocate a WRONG amount (5.0 instead of 10.0).
+    holdingCid <- submit admin do
+      createCmd MockHolding with admin, owner = attendee1, instrId = "cBTC", amount = 5.0
+    let badSpec = AllocationSpecification with
+          settlement = SettlementInfo with
+            executor = appOperator
+            settlementRef = Reference with id = "evt-1/slot-1", cid = None
+            requestedAt = t0
+            allocateBefore = tRsvpDeadline
+            settleBefore = tSettleBefore
+            meta = emptyMetadata
+          transferLegId = "slot-1"
+          transferLeg = TransferLeg with
+            sender = attendee1
+            receiver = appOperator
+            amount = 5.0            -- WRONG
+            instrumentId = InstrumentId with admin, id = "cBTC"
+            meta = emptyMetadata
+    badAlloc <- submit attendee1 do exerciseCmd factory Allocate with spec = badSpec, holdingCid
+    submitMustFail appOperator do exerciseCmd rsvp RecordAllocation with allocCid = badAlloc
+
+  -- (a') mismatched settlementRef also rejected.
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    inv <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+    rsvp <- submit (actAs attendee1 <> readAs appOperator) do exerciseCmd inv AcceptRSVP with currentEventCid = evCid
+    holdingCid <- submit admin do
+      createCmd MockHolding with admin, owner = attendee1, instrId = "cBTC", amount = 10.0
+    let badRefSpec = AllocationSpecification with
+          settlement = SettlementInfo with
+            executor = appOperator
+            settlementRef = Reference with id = "evt-1/WRONG", cid = None  -- WRONG ref
+            requestedAt = t0
+            allocateBefore = tRsvpDeadline
+            settleBefore = tSettleBefore
+            meta = emptyMetadata
+          transferLegId = "slot-1"
+          transferLeg = TransferLeg with
+            sender = attendee1
+            receiver = appOperator
+            amount = 10.0
+            instrumentId = InstrumentId with admin, id = "cBTC"
+            meta = emptyMetadata
+    badAlloc <- submit attendee1 do exerciseCmd factory Allocate with spec = badRefSpec, holdingCid
+    submitMustFail appOperator do exerciseCmd rsvp RecordAllocation with allocCid = badAlloc
+
+  -- (a'') mismatched receiver also rejected (the wrong-money slash-becomes-refund guard).
+  --       Everything matches except receiver = attendee1 (self) instead of appOperator (pot);
+  --       RecordAllocation must reject it (Leg receiver mismatch assert).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    inv <- submit organizer do exerciseCmd evCid InviteAttendee with attendee = attendee1, slotId = "slot-1"
+    rsvp <- submit (actAs attendee1 <> readAs appOperator) do exerciseCmd inv AcceptRSVP with currentEventCid = evCid
+    holdingCid <- submit admin do
+      createCmd MockHolding with admin, owner = attendee1, instrId = "cBTC", amount = 10.0
+    let badRcvSpec = AllocationSpecification with
+          settlement = SettlementInfo with
+            executor = appOperator
+            settlementRef = Reference with id = "evt-1/slot-1", cid = None
+            requestedAt = t0
+            allocateBefore = tRsvpDeadline
+            settleBefore = tSettleBefore
+            meta = emptyMetadata
+          transferLegId = "slot-1"
+          transferLeg = TransferLeg with
+            sender = attendee1
+            receiver = attendee1        -- WRONG: pays the stake back to the sender, not the pot
+            amount = 10.0
+            instrumentId = InstrumentId with admin, id = "cBTC"
+            meta = emptyMetadata
+    badAlloc <- submit attendee1 do exerciseCmd factory Allocate with spec = badRcvSpec, holdingCid
+    -- With receiver = attendee1, appOperator is NOT a stakeholder of the mock allocation, so
+    -- readAs attendee1 gives RecordAllocation's fetch read-visibility — otherwise this would
+    -- fail on contract-not-visible and never reach the "Leg receiver mismatch" assert we test.
+    submitMustFail (actAs appOperator <> readAs attendee1) do exerciseCmd rsvp RecordAllocation with allocCid = badAlloc
+
+  -- (b) double CheckIn fails (idempotency assert).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp <- stakeAttendee w evCid attendee1 "slot-1"
+    rsvp' <- submit organizer do exerciseCmd rsvp CheckIn with currentEventCid = evCid
+    -- rsvp' is already checkedIn; a second CheckIn on it must fail.
+    submitMustFail organizer do exerciseCmd rsvp' CheckIn with currentEventCid = evCid
+
+  -- (c) CancelRSVP pre-deadline releases the mock allocation (refund holding to attendee).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp <- stakeAttendee w evCid attendee1 "slot-1"
+    -- Still at t0 (before rsvpDeadline).
+    submit attendee1 do exerciseCmd rsvp CancelRSVP with extraArgs = noArgs
+    -- attendee1 got a refunded holding back.
+    hs <- query @MockHolding attendee1
+    let refunded = filter (\(_, h) -> h.owner == attendee1 && h.amount == 10.0) hs
+    length refunded === 1
+
+  -- (d) MarkWithdrawn AFTER check-in succeeds (the `not checkedIn` assert is intentionally absent).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp <- stakeAttendee w evCid attendee1 "slot-1"
+    rsvp' <- submit organizer do exerciseCmd rsvp CheckIn with currentEventCid = evCid
+    _rsvpW <- submit appOperator do exerciseCmd rsvp' MarkWithdrawn
+    pure ()
+
+  -- (e) CheckIn on a withdrawn RSVP fails (allocationCid == None + withdrawn == True).
+  do
+    w@World{..} <- setupWorld
+    evCid <- makeEvent w
+    rsvp <- stakeAttendee w evCid attendee1 "slot-1"
+    rsvpW <- submit appOperator do exerciseCmd rsvp MarkWithdrawn
+    submitMustFail organizer do exerciseCmd rsvpW CheckIn with currentEventCid = evCid
+  pure ()

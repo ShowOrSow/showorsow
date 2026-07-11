@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* ShowOrSow design tokens — LOCKED per 08-frontend.md. Dark theme only. */
+@theme {
+  --color-ink: #0E1518; /* page ground */
+  --color-surface: #162024;
+  --color-surface-2: #1C2A30;
+  --color-line: #24333A;
+  --color-text: #E8EDEA;
+  --color-muted: #8FA3A0;
+  --color-faint: #5C6E6C;
+  --color-gold: #E4B34A; /* ONLY stake/escrow accent + primary actions */
+  --color-refund: #5BBF8A;
+  --color-slash: #E06552;
+  --color-info: #6FA8C9;
+
+  /* Persona avatar colors */
+  --color-persona-organizer: #E4B34A; /* gold */
+  --color-persona-alice: #6FA8C9; /* info-blue */
+  --color-persona-bob: #5BBF8A; /* refund-green */
+  --color-persona-charlie: #C9A0E0;
+
+  --font-sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, "Courier New", monospace;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* tabular-nums for party IDs, amounts, tx ids */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* green/red balance flash */
+@keyframes flash-green {
+  0% { background-color: color-mix(in srgb, var(--color-refund) 45%, transparent); }
+  100% { background-color: transparent; }
+}
+@keyframes flash-red {
+  0% { background-color: color-mix(in srgb, var(--color-slash) 45%, transparent); }
+  100% { background-color: transparent; }
+}
+.flash-green { animation: flash-green 1.2s ease-out; }
+.flash-red { animation: flash-red 1.2s ease-out; }
+
+/* Simulated stepper pulse — respect reduced motion */
+@keyframes step-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.step-active { animation: step-pulse 1.1s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .step-active { animation: none; }
+  .flash-green,
+  .flash-red { animation: none; }
+  /* Tailwind's built-in pulse (StaleBadge dot + skeleton loaders) */
+  .animate-pulse { animation: none; }
+}
+
+/* Toast slide-in */
+@keyframes toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.toast-in { animation: toast-in 0.18s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .toast-in { animation: none; }
+}
