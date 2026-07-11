@@ -66,7 +66,9 @@ export function InvitePanel({
       push({ kind: "success", message: "Event link copied to clipboard." });
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      push({ kind: "error", message: "Couldn't copy — copy it manually." });
+      // Clipboard API needs a secure context — surface the URL itself so the
+      // organizer can copy it by hand.
+      push({ kind: "error", message: `Couldn't copy automatically — the link is: ${url}` });
     }
   }
 

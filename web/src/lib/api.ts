@@ -32,7 +32,9 @@ export class ApiError extends Error {
   body: ApiErrorBody;
 
   constructor(status: number, body: ApiErrorBody) {
-    super(body.detail || body.message || body.stage || `Request failed (${status})`);
+    // `error` is the backend's human-readable text (errBody.Error) — e.g. a
+    // wrong-password login is {error:'invalid email or password', stage:'auth'}.
+    super(body.detail || body.error || body.message || body.stage || `Request failed (${status})`);
     this.name = "ApiError";
     this.status = status;
     this.stage = body.stage;

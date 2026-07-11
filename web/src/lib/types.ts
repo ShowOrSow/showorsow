@@ -223,7 +223,10 @@ export interface SettlementPackage {
 }
 
 // Backend error envelope: 502 {stage, detail, errorId} / 409 {stage} (05 §2).
+// `error` carries the backend's human-readable text (errBody.Error) and is the
+// primary toast message fallback after `detail`.
 export interface ApiErrorBody {
+  error?: string;
   stage?: string;
   detail?: string;
   errorId?: string;
