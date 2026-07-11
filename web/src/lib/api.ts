@@ -3,15 +3,17 @@
 
 import type {
   ApiErrorBody,
+  AppConfig,
+  AuthResult,
   Balance,
   CreateEventBody,
   EventDetail,
   EventListRow,
+  LoginBody,
   MyRsvp,
   OrganizerRsvpRow,
-  Persona,
+  RegisterBody,
   SessionInfo,
-  SessionPost,
   SettlementPackage,
   Token,
 } from "./types";
@@ -81,10 +83,23 @@ async function request<T>(
 export const fetcher = <T>(path: string): Promise<T> => request<T>(path);
 
 export const api = {
-  // Session / persona
+  // Auth (Luma-style real accounts — 05 §2). Each sets the signed session cookie.
+  register: (body: RegisterBody) =>
+    request<AuthResult>("/api/auth/register", { method: "POST", json: body }),
+  login: (body: LoginBody) =>
+    request<AuthResult>("/api/auth/login", { method: "POST", json: body }),
+  logout: () => request<void>("/api/auth/logout", { method: "POST" }),
+  // Seeded demo accounts only; enabled by DEV_QUICK_LOGIN (config probe below).
+  devLogin: (email: string) =>
+    request<AuthResult>("/api/auth/dev-login", {
+      method: "POST",
+      json: { email },
+    }),
+
+  // Session — 401s when unauthenticated (route guard keys off that).
   getSession: () => request<SessionInfo>("/api/session"),
-  setSession: (persona: Persona) =>
-    request<SessionPost>("/api/session", { method: "POST", json: { persona } }),
+  // Config probe for the DEV quick-login strip — see types.AppConfig.
+  getConfig: () => request<AppConfig>("/api/config"),
 
   // Reference data
   getTokens: () => request<Token[]>("/api/tokens"),
@@ -97,16 +112,16 @@ export const api = {
   createEvent: (body: CreateEventBody) =>
     request<{ eventId: string }>("/api/events", { method: "POST", json: body }),
 
-  // Organizer actions
-  invite: (eventId: string, attendeePersona: Persona) =>
+  // Organizer actions — invite by email (05 §2); check-in posts {attendeeParty}.
+  invite: (eventId: string, email: string) =>
     request<OrganizerRsvpRow>(
       `/api/events/${encodeURIComponent(eventId)}/invites`,
-      { method: "POST", json: { attendeePersona } },
+      { method: "POST", json: { email } },
     ),
-  checkin: (eventId: string, attendeePersona: Persona) =>
+  checkin: (eventId: string, attendeeParty: string) =>
     request<OrganizerRsvpRow>(
       `/api/events/${encodeURIComponent(eventId)}/checkin`,
-      { method: "POST", json: { attendeePersona } },
+      { method: "POST", json: { attendeeParty } },
     ),
   close: (eventId: string) =>
     request<SettlementPackage>(

@@ -5,15 +5,13 @@ import type { EventListRow } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
 import { EventStatusChip, RsvpStatusChip } from "./StatusChip";
 import { CountdownChip } from "./CountdownChip";
-import { useSession } from "./SessionProvider";
-import { isOrganizer } from "@/lib/persona";
 
 // EventCard (08 §4): title, token badge, stake, RSVP-deadline countdown, status
-// chip, headcount (organizer only).
+// chip, headcount (organizer only). Role is per-event now (no global persona):
+// a row carrying `headcount` is one this user organizes.
 export function EventCard({ row }: { row: EventListRow }) {
-  const { persona } = useSession();
-  const organizer = isOrganizer(persona);
   const ev = row.event;
+  const organizer = row.headcount !== undefined;
 
   return (
     <Link

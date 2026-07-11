@@ -6,11 +6,14 @@ import type { Balance } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
 import { useSession } from "./SessionProvider";
 
-// BalancePill (08 §1): active persona's per-token balance from GET /api/balances
-// (live Holdings, not DB). Flashes green/red after settlement.
+// BalancePill (08 §1): the logged-in user's per-token balance from
+// GET /api/balances (live Holdings, not DB). Flashes green/red after settlement.
 export function BalancePill() {
-  const { persona } = useSession();
-  const { data } = useSWR<Balance[]>("/api/balances", { refreshInterval: 4000 });
+  const { user, isAuthenticated } = useSession();
+  const { data } = useSWR<Balance[]>(
+    isAuthenticated ? "/api/balances" : null,
+    { refreshInterval: 4000 },
+  );
   const [flash, setFlash] = useState<"" | "flash-green" | "flash-red">("");
   const prevTotals = useRef<Record<string, number>>({});
 
@@ -34,11 +37,11 @@ export function BalancePill() {
     }
   }, [data]);
 
-  // Reset baseline when persona changes so a switch doesn't false-flash.
+  // Reset baseline when the account changes so a login switch doesn't false-flash.
   useEffect(() => {
     prevTotals.current = {};
     setFlash("");
-  }, [persona]);
+  }, [user?.partyId]);
 
   // Data still loading / transient fetch error → neutral placeholder, NOT an
   // empty wallet (a mid-demo backend hiccup must not read as "no holdings").

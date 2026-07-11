@@ -4,14 +4,11 @@ import Link from "next/link";
 import useSWR from "swr";
 import type { EventListRow } from "@/lib/types";
 import { EventCard } from "@/components/EventCard";
-import { useSession } from "@/components/SessionProvider";
-import { isOrganizer } from "@/lib/persona";
 
-// /events — Event list (08 §2). Cards from GET /api/events (persona-scoped).
-// Organizer: + Create Event. Attendee: only events they're invited to.
+// /events — Event list (08 §2). Cards from GET /api/events (user-scoped: events
+// you organize + events you were invited to). Post-pivot any signed-in user can
+// create an event (organizer = whoever created it — 05 §2).
 export default function EventsPage() {
-  const { persona } = useSession();
-  const organizer = isOrganizer(persona);
   const { data, isLoading, error } = useSWR<EventListRow[]>("/api/events");
 
   return (
@@ -20,19 +17,15 @@ export default function EventsPage() {
         <div>
           <h1 className="text-xl font-semibold">Events</h1>
           <p className="text-sm text-muted">
-            {organizer
-              ? "Events you organize."
-              : "Events you're invited to — mirrors ledger visibility."}
+            Events you organize or were invited to — mirrors ledger visibility.
           </p>
         </div>
-        {organizer && (
-          <Link
-            href="/events/new"
-            className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-ink hover:brightness-95"
-          >
-            + Create Event
-          </Link>
-        )}
+        <Link
+          href="/events/new"
+          className="rounded-lg bg-gold px-3 py-2 text-sm font-semibold text-ink hover:brightness-95"
+        >
+          + Create Event
+        </Link>
       </div>
 
       {isLoading && <SkeletonGrid />}
@@ -46,7 +39,7 @@ export default function EventsPage() {
       {data && data.length === 0 && (
         <div className="rounded-xl border border-line bg-surface p-10 text-center">
           <p className="text-muted">
-            {organizer ? "No events yet — create one." : "No invitations yet."}
+            Nothing here yet — create an event, or wait for an invitation.
           </p>
         </div>
       )}

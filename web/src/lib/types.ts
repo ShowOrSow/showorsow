@@ -1,8 +1,18 @@
 // Response shapes mirroring 05-backend.md §2. These are the frontend's contract
 // with the Go backend — the ONLY thing the browser talks to (never the ledger).
+//
+// Auth pivot (Jul 11, 08 §1): PersonaSwitcher is gone. Identity is now a real
+// account (Luma-style) whose signup allocates a Canton party. No global
+// "persona" — a user is the organizer of the events they created, and an
+// attendee of the events they were invited to (role is per-event, from the
+// read model's response shape).
 
-export type Persona = "Organizer" | "Alice" | "Bob" | "Charlie";
-export const PERSONAS: Persona[] = ["Organizer", "Alice", "Bob", "Charlie"];
+// The logged-in account (05 §2: {user:{email, name, partyId}}).
+export interface User {
+  email: string;
+  name: string;
+  partyId: string;
+}
 
 // All SEVEN rsvp_status values (04/07 + 08 §2).
 export type RsvpStatus =
@@ -26,17 +36,44 @@ export const RSVP_STATUSES: RsvpStatus[] = [
 
 export type EventStatus = "open" | "ended" | "settled";
 
-// GET /api/session
+// GET /api/session → {user, indexerLagMs}. 401s when unauthenticated (the route
+// guard keys off that — see SessionProvider).
 export interface SessionInfo {
-  persona: Persona;
-  partyId: string;
+  user: User;
   indexerLagMs: number;
 }
 
-// POST /api/session
-export interface SessionPost {
-  persona: Persona;
-  partyId: string;
+// Auth request bodies (05 §2).
+export interface RegisterBody {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface LoginBody {
+  email: string;
+  password: string;
+}
+
+// Auth success → session cookie + {user}.
+export interface AuthResult {
+  user: User;
+}
+
+// Config probe for the DEV quick-login strip. Exposed at GET /api/config so the
+// UNAUTHENTICATED /login page can read it (GET /api/session 401s pre-login, so
+// the dev flag can't ride on it). The strip degrades to hidden if this probe is
+// absent or errors — documented choice, see /login page + api.getConfig.
+export interface AppConfig {
+  devQuickLogin: boolean;
+}
+
+// A seeded demo account offered by the DEV quick-login strip. The backend only
+// needs the email to POST /api/auth/dev-login; name/role are display sugar.
+export interface DevAccount {
+  email: string;
+  name: string;
+  role?: string;
 }
 
 // GET /api/tokens — configured tokens + live decimals from registry metadata
@@ -47,7 +84,7 @@ export interface Token {
   adminParty?: string;
 }
 
-// GET /api/balances — live Holding interface query for current persona
+// GET /api/balances — live Holding interface query for the current user
 export interface Balance {
   instrumentId: string;
   amount: string; // string to preserve precision; mono/tabular-nums render
@@ -77,18 +114,23 @@ export interface EventMeta {
   imageUrl?: string;
 }
 
-// GET /api/events — persona-scoped list rows
+// GET /api/events — user-scoped list rows.
 export interface EventListRow {
   event: EventCore;
   meta?: EventMeta;
-  // organizer-only headcount; attendee gets their own status
+  // organizer-only headcount; attendees get their own status. Presence of
+  // `headcount` (not a global role) marks the row as one this user organizes.
   headcount?: number;
   myStatus?: RsvpStatus;
 }
 
-// Organizer detail rsvp row
+// Organizer detail rsvp row. Post-pivot: carries the invitee's real name/email
+// (rows render name/email — 08 §2) and their Canton party (check-in posts
+// {attendeeParty} — 05 §2).
 export interface OrganizerRsvpRow {
-  attendeeLabel: string;
+  attendeeParty: string;
+  attendeeName?: string;
+  attendeeEmail?: string;
   status: RsvpStatus;
   checkedIn: boolean;
   rsvpCid?: string;
@@ -166,9 +208,9 @@ export interface SettlementRow {
 }
 
 export interface BalanceDelta {
-  // Contract pin (architect-decided): `party` is the PERSONA LABEL (e.g. "alice"),
-  // the SAME label used in settlements[].attendeeLabel — NOT the Canton party id.
-  // SettlementResults joins deltas → rows on this equality.
+  // `party` is the per-attendee DISPLAY LABEL the backend uses in
+  // settlements[].attendeeLabel (post-pivot: the invitee's name) — NOT the raw
+  // Canton party id. SettlementResults joins deltas → rows on this equality.
   party: string;
   before: string;
   after: string;

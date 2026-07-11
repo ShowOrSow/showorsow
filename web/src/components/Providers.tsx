@@ -5,8 +5,8 @@ import { fetcher } from "@/lib/api";
 import { ToastProvider } from "./ToastProvider";
 import { SessionProvider } from "./SessionProvider";
 
-// App-wide client providers: SWR (plain fetch + polling), session (active
-// persona), and error toasts. 08 §1 chrome hangs off these.
+// App-wide client providers: SWR (plain fetch + polling), session (logged-in
+// account + route guard), and error toasts. 08 §1 chrome hangs off these.
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <SWRConfig

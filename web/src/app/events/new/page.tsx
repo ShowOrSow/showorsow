@@ -2,24 +2,11 @@
 
 import Link from "next/link";
 import { EventForm } from "@/components/EventForm";
-import { useSession } from "@/components/SessionProvider";
-import { isOrganizer } from "@/lib/persona";
 
-// /events/new — Create event (organizer only, 08 §2).
+// /events/new — Create event (08 §2). Post-pivot any signed-in user can create
+// one (organizer = creator, 05 §2); the SessionProvider route guard already
+// redirects unauthenticated visitors to /login.
 export default function NewEventPage() {
-  const { persona, isLoading } = useSession();
-
-  if (!isLoading && !isOrganizer(persona)) {
-    return (
-      <div className="rounded-xl border border-line bg-surface p-8 text-center">
-        <p className="text-muted">Only the organizer can create events.</p>
-        <Link href="/events" className="mt-3 inline-block text-sm text-gold">
-          ← Back to events
-        </Link>
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto max-w-xl">
       <div className="mb-5">

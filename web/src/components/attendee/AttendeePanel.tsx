@@ -6,8 +6,8 @@ import type {
   AttendeeEventDetail,
   BalanceDelta,
   MyRsvp,
-  Persona,
   SettlementPackage,
+  User,
 } from "@/lib/types";
 import { useToast } from "../ToastProvider";
 import { useSession } from "../SessionProvider";
@@ -37,7 +37,7 @@ export function AttendeePanel({
   onMutate: () => void;
 }) {
   const { pushError, push } = useToast();
-  const { persona } = useSession();
+  const { user } = useSession();
   const myRsvp = detail.myRsvp;
   const ev = detail.event;
 
@@ -195,7 +195,7 @@ export function AttendeePanel({
         return (
           <SettledCard
             checkedIn={myRsvp.checkedIn}
-            delta={findMyDelta(settlement?.deltas, persona)}
+            delta={findMyDelta(settlement?.deltas, user)}
             tokenLabel={ev.tokenLabel}
           />
         );
@@ -235,21 +235,23 @@ function StaticNote({
   );
 }
 
-// Contract pin: deltas[].party is the PERSONA LABEL (e.g. "alice"), the same
-// label used in settlements[].attendeeLabel — NOT the Canton party id. The
-// attendee settlement response is persona-scoped, but harden anyway: match the
-// delta whose party equals the session persona label (case-insensitive), and
-// only fall back to deltas[0] when exactly one row is returned. If the backend
-// ever leaks multiple rows, we surface nothing rather than another party's delta.
+// Contract pin: deltas[].party is the per-attendee DISPLAY LABEL the backend
+// uses in settlements[].attendeeLabel (post-pivot: the user's name) — NOT the
+// raw Canton party id. The attendee settlement response is self-scoped, but
+// harden anyway: match the delta whose party equals the logged-in user's name
+// or email (case-insensitive), and only fall back to deltas[0] when exactly one
+// row is returned. If the backend ever leaks multiple rows, we surface nothing
+// rather than another party's delta.
 function findMyDelta(
   deltas: BalanceDelta[] | undefined,
-  persona: Persona | undefined,
+  user: User | undefined,
 ): BalanceDelta | undefined {
   if (!deltas || deltas.length === 0) return undefined;
-  if (persona) {
-    const mine = deltas.find(
-      (d) => d.party.toLowerCase() === persona.toLowerCase(),
-    );
+  if (user) {
+    const keys = [user.name, user.email]
+      .filter(Boolean)
+      .map((k) => k.toLowerCase());
+    const mine = deltas.find((d) => keys.includes(d.party.toLowerCase()));
     if (mine) return mine;
   }
   return deltas.length === 1 ? deltas[0] : undefined;
