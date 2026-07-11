@@ -18,7 +18,7 @@ import (
 //  2. share = floor(slashedTotal / numCheckedIn, decimals); dust stays in pot.
 //  3. Per recipient: TransferFactory_Transfer as appOperator with
 //     meta["showorsow.dev/event"] = eventId/slotId; then auto-accept as the
-//     recipient persona.
+//     recipient user party.
 func (r *Runner) runPayouts(ctx context.Context, ev *store.EventRow, opParty string, items []StakedItem) ([]PayoutEntry, error) {
 	var ghostCount, checkedInCount int
 	var checkedIn []StakedItem
@@ -141,7 +141,7 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 		return PayoutEntry{RecipientParty: r.labelFor(ctx, it.AttendeeParty), Amount: amount, TransferCid: ""}, nil
 	}
 
-	// Two-step: auto-TransferInstruction_Accept as the recipient persona.
+	// Two-step: auto-TransferInstruction_Accept as the recipient user party.
 	if err := r.acceptTransfer(ctx, rc, ev, it.AttendeeParty, transferCid); err != nil {
 		r.logErr("payout-accept", err)
 		// The offer exists even if accept failed; the recipient can retry.
@@ -151,7 +151,7 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 }
 
 // acceptTransfer auto-accepts a pending payout TransferInstruction as the
-// recipient persona (05 §5.3).
+// recipient user party (05 §5.3).
 func (r *Runner) acceptTransfer(ctx context.Context, rc *registry.Client, ev *store.EventRow, recipientParty, instructionCid string) error {
 	cc, err := rc.TransferInstructionChoiceContext(ctx, instructionCid, "accept")
 	if err != nil {

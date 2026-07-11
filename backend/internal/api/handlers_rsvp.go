@@ -547,8 +547,13 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 
 	type settlementEntry struct {
 		AttendeeLabel string `json:"attendeeLabel"`
-		Outcome       string `json:"outcome"`
+		Outcome       string `json:"outcome"` // web-pinned: refunded | slashed
 		Amount        string `json:"amount"`
+		CheckedIn     bool   `json:"checkedIn"`
+		IsGhost       bool   `json:"isGhost"`
+		PayoutAmount  string `json:"payoutAmount,omitempty"`
+		PayoutStatus  string `json:"payoutStatus,omitempty"`
+		TxID          string `json:"txId,omitempty"`
 	}
 	type payoutEntry struct {
 		Party  string `json:"party"`
@@ -571,10 +576,20 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		label := s.labelForParty(ctx(r), rrow.AttendeeParty)
-		out.Settlements = append(out.Settlements, settlementEntry{AttendeeLabel: label, Outcome: rrow.Outcome, Amount: rrow.Amount})
+		entry := settlementEntry{
+			AttendeeLabel: label,
+			Outcome:       settle.WebOutcome(rrow.Outcome),
+			Amount:        rrow.Amount,
+			CheckedIn:     rrow.CheckedIn,
+			IsGhost:       !rrow.CheckedIn,
+			TxID:          rrow.UpdateID,
+		}
 		if rrow.PayoutAmount != "" && rrow.PayoutAmount != "0" {
+			entry.PayoutAmount = rrow.PayoutAmount
+			entry.PayoutStatus = rrow.PayoutStatus
 			out.Payouts = append(out.Payouts, payoutEntry{Party: label, Amount: rrow.PayoutAmount})
 		}
+		out.Settlements = append(out.Settlements, entry)
 	}
 	for _, d := range deltas {
 		label := s.labelForParty(ctx(r), d.Party)

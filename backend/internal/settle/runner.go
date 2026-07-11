@@ -51,13 +51,32 @@ type SettlementResult struct {
 	Deltas      []DeltaEntry      `json:"deltas"`
 }
 
-// SettlementEntry describes one RSVP outcome. attendeeLabel is the persona label
-// (join key with deltas[].party — architect cross-component pin), not the party id.
+// SettlementEntry describes one RSVP outcome in the web-pinned shape.
+// attendeeLabel is the user's DISPLAY NAME (join key with deltas[].party —
+// architect cross-component pin), never the party id. Outcome values are the
+// web-pinned strings 'refunded' | 'slashed' (the DB enum stays refund|slash;
+// mapping happens at the emission layer only).
 type SettlementEntry struct {
 	AttendeeLabel string `json:"attendeeLabel"`
 	SlotID        string `json:"slotId"`
-	Outcome       string `json:"outcome"` // refund | slash | withdrawn
+	Outcome       string `json:"outcome"` // refunded | slashed
 	Amount        string `json:"amount"`
+	CheckedIn     bool   `json:"checkedIn"`
+	IsGhost       bool   `json:"isGhost"`
+	PayoutAmount  string `json:"payoutAmount,omitempty"`
+	PayoutStatus  string `json:"payoutStatus,omitempty"` // offered | accepted
+	TxID          string `json:"txId,omitempty"`         // ledger update_id (from the read model; empty in the immediate close response)
+}
+
+// WebOutcome maps the DB settle_outcome enum to the web-pinned strings.
+func WebOutcome(dbOutcome string) string {
+	switch dbOutcome {
+	case "refund":
+		return "refunded"
+	case "slash":
+		return "slashed"
+	}
+	return dbOutcome
 }
 
 // PayoutEntry describes one pot → recipient transfer.
@@ -134,18 +153,22 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 	}
 
 	// settlement entries (mirrors the ledger outcome; source of truth is the
-	// indexer, 05 §4.7). `attendeeLabel` is the PERSONA LABEL — the cross-
-	// component join key with deltas[].party (architect pin), never the party id.
+	// indexer, 05 §4.7). `attendeeLabel` is the user's DISPLAY NAME — the
+	// cross-component join key with deltas[].party (architect pin), never the
+	// party id. TxID stays empty here: the update_id arrives via the indexer
+	// and is served by GET .../settlement once projected.
 	for _, it := range items {
-		outcome := "slash"
+		outcome := "slashed"
 		if it.CheckedIn {
-			outcome = "refund"
+			outcome = "refunded"
 		}
 		res.Settlements = append(res.Settlements, SettlementEntry{
 			AttendeeLabel: r.labelFor(ctx, it.AttendeeParty),
 			SlotID:        it.SlotID,
 			Outcome:       outcome,
 			Amount:        ev.StakeAmount,
+			CheckedIn:     it.CheckedIn,
+			IsGhost:       !it.CheckedIn,
 		})
 	}
 
@@ -159,6 +182,19 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 	}
 	res.Payouts = payouts
 
+	// Join payout results into the settlement entries — the web renders the
+	// payout column from the row itself, not from the separate payouts array.
+	payoutByParty := map[string]string{}
+	for _, p := range payouts {
+		payoutByParty[p.RecipientParty] = p.Amount
+	}
+	for i, it := range items {
+		if amt, ok := payoutByParty[it.AttendeeParty]; ok {
+			res.Settlements[i].PayoutAmount = amt
+			res.Settlements[i].PayoutStatus = "accepted" // §5.3 auto-accept path
+		}
+	}
+
 	// 6b. after snapshots.
 	if err := r.snapshot(ctx, ev, snapParties, store.PhaseAfter); err != nil {
 		r.logErr("after-snapshot", err)
@@ -169,9 +205,9 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 		return res, fmt.Errorf("MarkSettled: %w", err)
 	}
 
-	// deltas from the snapshots just written. `party` is the PERSONA LABEL (the
-	// join key the web SettlementResults matches against settlements[].attendeeLabel,
-	// architect pin) — map the raw party id back to its persona label.
+	// deltas from the snapshots just written. `party` is the user's DISPLAY
+	// NAME (the join key the web SettlementResults matches against
+	// settlements[].attendeeLabel, architect pin) — never the raw party id.
 	deltas, err := r.d.Store.GetBalanceDeltas(ctx, ev.EventID)
 	if err == nil {
 		for _, dRow := range deltas {

@@ -343,12 +343,16 @@ func (s *Store) GetEventStats(ctx context.Context, eventID string) (*EventStats,
 	return &st, nil
 }
 
-// SettlementRow joins settlements ⋈ payouts ⋈ balance_snapshots per attendee.
+// SettlementRow joins settlements ⋈ payouts ⋈ rsvps ⋈ balance_snapshots per
+// attendee (the full web-pinned settlement package, 05 §2).
 type SettlementRow struct {
 	AttendeeParty string
 	Outcome       string
 	Amount        string
 	PayoutAmount  string
+	PayoutStatus  string
+	UpdateID      string
+	CheckedIn     bool
 	BalanceBefore string
 	BalanceAfter  string
 	InstrumentID  string
@@ -361,12 +365,17 @@ func (s *Store) GetSettlementPackage(ctx context.Context, eventID string) ([]Set
 		       s.outcome::text,
 		       s.amount::text,
 		       COALESCE(p.amount, 0)::text                AS payout_amount,
+		       COALESCE(p.status::text, '')               AS payout_status,
+		       COALESCE(s.update_id, '')                  AS update_id,
+		       COALESCE(rv.checked_in, false)             AS checked_in,
 		       COALESCE(bb.amount, 0)::text               AS balance_before,
 		       COALESCE(ba.amount, 0)::text               AS balance_after,
 		       COALESCE(bb.instrument_id, ba.instrument_id, '') AS instrument_id
 		FROM settlements s
 		LEFT JOIN payouts p
 		       ON p.event_id = s.event_id AND p.attendee_party = s.attendee_party
+		LEFT JOIN rsvps rv
+		       ON rv.event_id = s.event_id AND rv.attendee_party = s.attendee_party
 		LEFT JOIN balance_snapshots bb
 		       ON bb.event_id = s.event_id AND bb.party = s.attendee_party AND bb.phase = 'before'
 		LEFT JOIN balance_snapshots ba
@@ -381,7 +390,8 @@ func (s *Store) GetSettlementPackage(ctx context.Context, eventID string) ([]Set
 	for rows.Next() {
 		var r SettlementRow
 		if err := rows.Scan(&r.AttendeeParty, &r.Outcome, &r.Amount,
-			&r.PayoutAmount, &r.BalanceBefore, &r.BalanceAfter, &r.InstrumentID); err != nil {
+			&r.PayoutAmount, &r.PayoutStatus, &r.UpdateID, &r.CheckedIn,
+			&r.BalanceBefore, &r.BalanceAfter, &r.InstrumentID); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
