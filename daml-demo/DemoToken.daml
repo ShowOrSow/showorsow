@@ -1,0 +1,199 @@
+-- | DemoToken — a self-contained, mintable, allocation-capable CIP-56 test token.
+--
+-- Deployable faucet token (plan/04-smart-contract.md §1.7) so the whole
+-- stake -> settle flow runs locally without DevNet / external faucets (demo safety
+-- net, plan/09-risks.md R2). Ships in its OWN DAR — NOT the main showorsow DAR,
+-- which stays token-agnostic.
+--
+-- It PROMOTES the proven MockRegistry shapes (daml-test/MockRegistry.daml, already
+-- green under `dpm test`) to a deployable package, with two differences:
+--   * `DemoIssuer.Mint` is the faucet's on-ledger action (issuer-minted holdings).
+--   * `DemoAllocationFactory` implements the REAL `AllocationFactory` interface
+--     (allocation-instruction-v1), not MockRegistry's plain `Allocate` choice — so
+--     the backend's demo-token mode can exercise `AllocationFactory_Allocate` on it
+--     exactly as it would a real cBTC registry factory (see backend
+--     internal/ledger/qualified.go: AllocationFactoryInterfaceID). The escrow flow
+--     (`Allocation_ExecuteTransfer` / `Allocation_Cancel`) is identical to real cBTC.
+--
+-- Daml 3.x: no contract keys, no submitMulti. Interface-instance syntax mirrors
+-- MockRegistry verbatim, adjusting only issuer/mint semantics.
+module DemoToken where
+
+import DA.Foldable (forA_)
+
+import Splice.Api.Token.MetadataV1 (emptyMetadata)
+import Splice.Api.Token.HoldingV1
+  ( Holding
+  , HoldingView(..)
+  , InstrumentId(..)
+  )
+-- Unqualified: the `interface instance Allocation for DemoAllocation` block must define
+-- the top-level interface methods `allocation_executeTransferImpl` / `allocation_cancelImpl`
+-- / `allocation_withdrawImpl` (not covered by any `Allocation(..)` shorthand). A bare
+-- import brings them plus all the record / result types (AllocationView, AllocationSpecification,
+-- TransferLeg, Allocation_*Result, ...).
+import Splice.Api.Token.AllocationV1
+-- Unqualified for the same reason: the `interface instance AllocationFactory for
+-- DemoAllocationFactory` block defines `allocationFactory_allocateImpl` /
+-- `allocationFactory_publicFetchImpl`, and we construct AllocationInstructionResult /
+-- AllocationInstructionResult_Completed from here.
+import Splice.Api.Token.AllocationInstructionV1
+
+-- The single instrument this faucet issues. admin = issuer, id = "SHOW".
+demoInstrumentId : Party -> InstrumentId
+demoInstrumentId issuer = InstrumentId with admin = issuer, id = "SHOW"
+
+-- ---------------------------------------------------------------------------
+-- DemoHolding — a toy asset position implementing the Holding interface.
+-- Signed by the issuer ONLY (the instrument admin), so the issuer can mint test
+-- holdings as a faucet without collecting the owner's signature; the owner is an
+-- observer so they can see and reference their holding cid. Mirrors MockHolding.
+-- ---------------------------------------------------------------------------
+template DemoHolding
+  with
+    issuer : Party      -- instrument admin (the faucet party)
+    owner : Party
+    amount : Decimal
+  where
+    signatory issuer
+    observer owner
+
+    interface instance Holding for DemoHolding where
+      view = HoldingView with
+        owner
+        instrumentId = demoInstrumentId issuer
+        amount
+        lock = None
+        meta = emptyMetadata
+
+-- ---------------------------------------------------------------------------
+-- DemoIssuer — the on-ledger faucet. `Mint` issues a DemoHolding to a recipient.
+-- ---------------------------------------------------------------------------
+template DemoIssuer
+  with
+    issuer : Party
+  where
+    signatory issuer
+
+    -- Faucet action: mint `amount` SHOW to `recipient`. Nonconsuming so one issuer
+    -- contract mints many holdings. Authority: controller issuer + signatory issuer
+    -- covers DemoHolding's single signatory (issuer).
+    nonconsuming choice Mint : ContractId DemoHolding
+      with
+        recipient : Party
+        amount : Decimal
+      controller issuer
+      do
+        create DemoHolding with
+          issuer
+          owner = recipient
+          amount
+
+-- ---------------------------------------------------------------------------
+-- DemoAllocation — implements the Allocation interface (promoted from MockAllocation).
+--   ExecuteTransfer: mints a DemoHolding for the receiver (the slash -> pot).
+--   Cancel:          mints a DemoHolding back to the sender (the refund).
+-- Signed by issuer(admin) + sender (mirrors AmuletAllocation). The receiver is an
+-- OBSERVER, not a signatory: creating the allocation inside AllocationFactory_Allocate
+-- (controller = sender, factory signed by admin) needs only admin + sender authority.
+-- The receiver's authority is supplied at EXECUTE time by the settlement contract's
+-- signatory set (in ShowOrSow, StakedRSVP's attendee + organizer + appOperator covers
+-- executor + sender + receiver — the [executor, sender, receiver] controller set).
+-- ---------------------------------------------------------------------------
+template DemoAllocation
+  with
+    admin : Party       -- the issuer / instrument admin
+    spec : AllocationSpecification
+  where
+    signatory admin, spec.transferLeg.sender
+    observer spec.transferLeg.receiver
+
+    interface instance Allocation for DemoAllocation where
+      view = AllocationView with
+        allocation = spec
+        holdingCids = []
+        meta = emptyMetadata
+
+      allocation_executeTransferImpl _self _arg = do
+        -- Slash: deliver the staked amount to the receiver (the pot).
+        newHolding <- create DemoHolding with
+          issuer = admin
+          owner = spec.transferLeg.receiver
+          amount = spec.transferLeg.amount
+        pure Allocation_ExecuteTransferResult with
+          senderHoldingCids = []
+          receiverHoldingCids = [toInterfaceContractId newHolding]
+          meta = emptyMetadata
+
+      allocation_cancelImpl _self _arg = do
+        -- Refund: return the staked amount to the sender.
+        newHolding <- create DemoHolding with
+          issuer = admin
+          owner = spec.transferLeg.sender
+          amount = spec.transferLeg.amount
+        pure Allocation_CancelResult with
+          senderHoldingCids = [toInterfaceContractId newHolding]
+          meta = emptyMetadata
+
+      allocation_withdrawImpl _self _arg = do
+        -- Sender-initiated withdraw pre-settlement; refund to sender.
+        newHolding <- create DemoHolding with
+          issuer = admin
+          owner = spec.transferLeg.sender
+          amount = spec.transferLeg.amount
+        pure Allocation_WithdrawResult with
+          senderHoldingCids = [toInterfaceContractId newHolding]
+          meta = emptyMetadata
+
+-- ---------------------------------------------------------------------------
+-- DemoAllocationFactory — implements the standard AllocationFactory interface so the
+-- backend (and any wallet) can exercise `AllocationFactory_Allocate` to escrow funds,
+-- identically to a real registry factory. Signed by the issuer (admin); `senders` are
+-- observers so prospective senders can find + exercise the factory (the mock discloses
+-- the factory off-ledger in production; here we simply make senders observers).
+-- ---------------------------------------------------------------------------
+template DemoAllocationFactory
+  with
+    admin : Party           -- the issuer / instrument admin (the factory's view admin)
+    senders : [Party]
+  where
+    signatory admin
+    observer senders
+
+    interface instance AllocationFactory for DemoAllocationFactory where
+      view = AllocationFactoryView with
+        admin
+        meta = emptyMetadata
+
+      -- Create the allocation directly (Completed, not Pending): validate the expected
+      -- admin + instrument, consume the sender's funding holdings (funds "locked"), and
+      -- produce a DemoAllocation coerced to the Allocation interface.
+      allocationFactory_allocateImpl _self arg = do
+        let spec = arg.allocation
+        assertMsg "Factory admin mismatch" (arg.expectedAdmin == admin)
+        assertMsg "Instrument admin must be the issuer"
+          (spec.transferLeg.instrumentId.admin == admin)
+        assertMsg "Instrument id must be SHOW"
+          (spec.transferLeg.instrumentId.id == "SHOW")
+        -- Consume the sender's funding holdings. inputHoldingCids are Holding-interface
+        -- cids; in this self-contained package the only implementation is DemoHolding, so
+        -- coerce back to the concrete cid to fetch + archive (issuer authority is present
+        -- via the factory signatory, so the archive is authorized).
+        forA_ arg.inputHoldingCids $ \hcid -> do
+          let concreteCid = fromInterfaceContractId @DemoHolding hcid
+          h <- fetch concreteCid
+          assertMsg "Funding holding not owned by the leg sender"
+            (h.owner == spec.transferLeg.sender)
+          archive concreteCid
+        allocCid <- create DemoAllocation with admin, spec
+        pure AllocationInstructionResult with
+          output = AllocationInstructionResult_Completed with
+            allocationCid = toInterfaceContractId allocCid
+          senderChangeCids = []
+          meta = emptyMetadata
+
+      allocationFactory_publicFetchImpl _self arg = do
+        assertMsg "Factory admin mismatch" (arg.expectedAdmin == admin)
+        pure AllocationFactoryView with
+          admin
+          meta = emptyMetadata

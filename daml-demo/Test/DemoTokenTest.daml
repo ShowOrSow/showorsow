@@ -1,0 +1,138 @@
+-- | DemoTokenTest — `dpm test` coverage for the deployable DemoToken package
+-- (plan/04-smart-contract.md §1.7). No network, no ShowOrSow dependency: this
+-- package is self-contained. Exercises the full faucet -> escrow -> settle flow:
+--   mint -> AllocationFactory_Allocate -> Allocation_ExecuteTransfer (slash)
+--   mint -> AllocationFactory_Allocate -> Allocation_Cancel          (refund)
+-- asserting SHOW balances after each settlement path.
+module Test.DemoTokenTest where
+
+import DA.Assert ((===))
+import DA.Time (time)
+import DA.Date (date, Month(..))
+import Daml.Script
+
+import Splice.Api.Token.MetadataV1
+  ( ExtraArgs(..)
+  , emptyChoiceContext
+  , emptyMetadata
+  )
+import Splice.Api.Token.HoldingV1 (InstrumentId(..))
+import Splice.Api.Token.AllocationV1
+  ( AllocationSpecification(..)
+  , SettlementInfo(..)
+  , Reference(..)
+  , TransferLeg(..)
+  , Allocation_ExecuteTransfer(..)
+  , Allocation_Cancel(..)
+  )
+import Splice.Api.Token.AllocationInstructionV1
+  ( AllocationFactory
+  , AllocationFactory_Allocate(..)
+  , AllocationInstructionResult_Output(..)
+  )
+
+import DemoToken
+
+-- Empty registry ChoiceContext — mirrors the backend's demo-token mode, which
+-- exercises the allocation choices directly with no registry context (§1.7).
+noArgs : ExtraArgs
+noArgs = ExtraArgs with context = emptyChoiceContext, meta = emptyMetadata
+
+-- A fixed wall-clock reference (the demo token enforces no time gates itself).
+tRef : Time
+tRef = time (date 2026 Jul 12) 12 0 0
+
+-- Total SHOW a party owns (their own DemoHoldings).
+balanceOf : Party -> Script Decimal
+balanceOf p = do
+  hs <- query @DemoHolding p
+  pure (sum [ h.amount | (_, h) <- hs, h.owner == p ])
+
+-- ---------------------------------------------------------------------------
+-- Full flow: mint, allocate, execute (slash), then allocate, cancel (refund).
+-- ---------------------------------------------------------------------------
+demoTokenFlow : Script ()
+demoTokenFlow = do
+  issuer <- allocateParty "issuer"
+  alice  <- allocateParty "alice"     -- leg sender
+  pot    <- allocateParty "pot"       -- executor + receiver (the pot)
+
+  -- Faucet + factory bootstrap.
+  issuerCid  <- submit issuer do createCmd DemoIssuer with issuer
+  factoryCid <- submit issuer do
+    createCmd DemoAllocationFactory with admin = issuer, senders = [alice]
+  let factory = toInterfaceContractId @AllocationFactory factoryCid
+
+  -- Build the allocation spec for a leg: alice -> pot for `amount` SHOW.
+  let mkSpec legId amount = AllocationSpecification with
+        settlement = SettlementInfo with
+          executor = pot
+          settlementRef = Reference with id = "demo/" <> legId, cid = None
+          requestedAt = tRef
+          allocateBefore = tRef
+          settleBefore = tRef
+          meta = emptyMetadata
+        transferLegId = legId
+        transferLeg = TransferLeg with
+          sender = alice
+          receiver = pot
+          amount
+          instrumentId = InstrumentId with admin = issuer, id = "SHOW"
+          meta = emptyMetadata
+
+  -- ---- Slash path: mint 10, allocate, execute transfer -> pot gets 10. ----
+  h1 <- submit issuer do exerciseCmd issuerCid Mint with recipient = alice, amount = 10.0
+  aliceStart <- balanceOf alice
+  aliceStart === 10.0
+
+  res1 <- submit alice do
+    exerciseCmd factory AllocationFactory_Allocate with
+      expectedAdmin = issuer
+      allocation = mkSpec "slot-1" 10.0
+      requestedAt = tRef
+      inputHoldingCids = [toInterfaceContractId h1]
+      extraArgs = noArgs
+  alloc1 <- case res1.output of
+    AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "expected a Completed allocation"
+
+  -- Funding holding was consumed by Allocate (funds locked).
+  aliceLocked <- balanceOf alice
+  aliceLocked === 0.0
+
+  -- Execute the transfer (no-show slash): controllers = [executor, sender, receiver]
+  -- = [pot, alice, pot]; supply both authorities via actAs (no submitMulti in 3.x).
+  _ <- submit (actAs alice <> actAs pot) do
+    exerciseCmd alloc1 Allocation_ExecuteTransfer with extraArgs = noArgs
+
+  potAfterSlash <- balanceOf pot
+  potAfterSlash === 10.0
+  aliceAfterSlash <- balanceOf alice
+  aliceAfterSlash === 0.0
+
+  -- ---- Refund path: mint 7, allocate, cancel -> alice refunded 7, pot unchanged. ----
+  h2 <- submit issuer do exerciseCmd issuerCid Mint with recipient = alice, amount = 7.0
+  res2 <- submit alice do
+    exerciseCmd factory AllocationFactory_Allocate with
+      expectedAdmin = issuer
+      allocation = mkSpec "slot-2" 7.0
+      requestedAt = tRef
+      inputHoldingCids = [toInterfaceContractId h2]
+      extraArgs = noArgs
+  alloc2 <- case res2.output of
+    AllocationInstructionResult_Completed cid -> pure cid
+    _ -> abort "expected a Completed allocation"
+
+  aliceLocked2 <- balanceOf alice
+  aliceLocked2 === 0.0
+
+  _ <- submit (actAs alice <> actAs pot) do
+    exerciseCmd alloc2 Allocation_Cancel with extraArgs = noArgs
+
+  aliceAfterRefund <- balanceOf alice
+  aliceAfterRefund === 7.0
+  -- Pot is untouched by the cancel (still just the one slashed stake).
+  potAfterRefund <- balanceOf pot
+  potAfterRefund === 10.0
+
+  pure ()

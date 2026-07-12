@@ -1,0 +1,23 @@
+sdk-version: 3.5.2
+name: showorsow-demo-token
+version: 0.1.0
+source: .
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+data-dependencies:
+  # The six CIP-56 token-standard interface DARs (hyperledger-labs/splice,
+  # token-standard/). Same relative lib path as ../daml/daml.yaml — the DARs
+  # already live in ../daml/lib/ (fetched by scripts/fetch-dars.ps1).
+  # DemoHolding implements holding-v1:Holding; DemoAllocation implements
+  # allocation-v1:Allocation; DemoAllocationFactory implements
+  # allocation-instruction-v1:AllocationFactory. metadata-v1 is the shared
+  # dependency; transfer-instruction-v1 and allocation-request-v1 are carried so
+  # the DAR's dependency set matches the main package (dpm resolves them all).
+  - ../daml/lib/splice-api-token-metadata-v1.dar
+  - ../daml/lib/splice-api-token-holding-v1.dar
+  - ../daml/lib/splice-api-token-transfer-instruction-v1.dar
+  - ../daml/lib/splice-api-token-allocation-v1.dar
+  - ../daml/lib/splice-api-token-allocation-request-v1.dar
+  - ../daml/lib/splice-api-token-allocation-instruction-v1.dar
