@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Publish the ShowOrSow monorepo to github.com/ShowOrSow/showorsow.
 

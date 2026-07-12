@@ -19,8 +19,6 @@ import Splice.Api.Token.MetadataV1 (ExtraArgs, ChoiceExecutionMetadata(..), empt
 import Splice.Api.Token.HoldingV1 (InstrumentId(..))
 import Splice.Api.Token.AllocationV1
   ( Allocation
-  , AllocationView(..)
-  , AllocationSpecification(..)
   , SettlementInfo(..)
   , Reference(..)
   , TransferLeg(..)

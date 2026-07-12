@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
   Fetch/build the six CIP-56 token-standard interface DARs that ShowOrSow's Daml

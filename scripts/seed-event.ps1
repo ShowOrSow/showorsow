@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Seed the ShowOrSow demo event + invites via the Go backend REST API.
 

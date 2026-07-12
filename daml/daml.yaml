@@ -1,4 +1,4 @@
-sdk-version: 3.4.11
+sdk-version: 3.5.2
 name: showorsow
 version: 0.1.0
 source: .
@@ -8,11 +8,10 @@ dependencies:
 data-dependencies:
   # CIP-56 token-standard interface DARs (from hyperledger-labs/splice, token-standard/).
   # Fetch/build these into daml/lib/ via scripts/fetch-dars.ps1 before `dpm build`.
-  # The .dar filenames below assume the v1 package versions; adjust the version
-  # suffix to match whatever fetch-dars.ps1 produces (see that script's output).
+  # Only the four the main contract actually references are listed — transfer-
+  # instruction-v1 and allocation-instruction-v1 are used off-ledger (Go backend)
+  # and in the test package's mock, not by ShowOrSow.daml itself.
   - lib/splice-api-token-metadata-v1.dar
   - lib/splice-api-token-holding-v1.dar
-  - lib/splice-api-token-transfer-instruction-v1.dar
   - lib/splice-api-token-allocation-v1.dar
   - lib/splice-api-token-allocation-request-v1.dar
-  - lib/splice-api-token-allocation-instruction-v1.dar
