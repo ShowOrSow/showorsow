@@ -115,7 +115,15 @@ sequenceDiagram
 | appOperator (app party) | Everything it co-signed — which is the app's own workflow, not attendees' other holdings |
 | Everyone else on Canton | Nothing. The contracts don't exist on their nodes. |
 
-The test suite proves the core claim without any network: `dpm test` runs privacy assertions (`query` as attendee2 returns only their own contracts; unauthorized `CheckIn` fails).
+The test suite proves the core claim without any network — and it's **green** (`dpm test`, Daml SDK 3.5.2): all five scenarios pass, including `privacyAssertions` (`query` as attendee2 returns only their own contracts; an unauthorized `CheckIn` `submitMustFail`s) and `happyPath` (3 stake → 2 check-in → 1 ghost → settle → refunds + slash + pot redistribution).
+
+```
+Test/DemoScript.daml:setupWorld:        ok
+Test/DemoScript.daml:deadlineTests:     ok
+Test/DemoScript.daml:happyPath:         ok
+Test/DemoScript.daml:validationTests:   ok
+Test/DemoScript.daml:privacyAssertions: ok
+```
 
 ## Monorepo layout
 
