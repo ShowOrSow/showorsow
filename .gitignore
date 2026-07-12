@@ -10,6 +10,3 @@ __pycache__/
 bin/
 target/
 .playwright-mcp/
-.wslbuild.log
-.wslbuild.run
-.wsl-build.sh
