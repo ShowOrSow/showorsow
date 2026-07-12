@@ -31,7 +31,7 @@ if (-not (Test-Path (Join-Path $work '.git'))) {
   if ($LASTEXITCODE -ne 0) { throw "pull failed" }
 }
 
-$folders = @('daml', 'daml-test', 'backend', 'indexer', 'web', 'scripts')
+$folders = @('daml', 'daml-test', 'daml-demo', 'backend', 'indexer', 'web', 'scripts')
 foreach ($f in $folders) {
   # /MIR mirrors (incl. deletions); exclude build junk and secrets.
   robocopy (Join-Path $src $f) (Join-Path $work $f) /MIR /NFL /NDL /NJH /NJS `
