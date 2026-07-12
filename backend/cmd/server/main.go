@@ -94,6 +94,12 @@ func main() {
 	watcher := settle.NewWatcher(srv.SettleDeps())
 	go watcher.Run(rootCtx)
 
+	// Deposit acceptor (05 §6b) — ~15s tick, its own goroutine. Auto-accepts
+	// pending CIP-56 TransferInstructions addressed to any registered user party
+	// (faucet / exchange / peer transfers) so funded balances actually land.
+	depositAcceptor := settle.NewDepositAcceptor(srv.SettleDeps())
+	go depositAcceptor.Run(rootCtx)
+
 	httpSrv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           srv.Routes(),

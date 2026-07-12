@@ -433,6 +433,27 @@ func (s *Store) GetBalanceDeltas(ctx context.Context, eventID string) ([]Balance
 	return out, rows.Err()
 }
 
+// ListUserParties returns every registered user's Canton party id. The deposit
+// acceptor watcher (05 §6b) sweeps these as the set of receiver parties whose
+// pending TransferInstructions it accepts. Empty party ids are excluded.
+func (s *Store) ListUserParties(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT party_id FROM users WHERE party_id <> '' ORDER BY party_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // ---- withdrawal watcher query (05 §7) ----
 
 // WithdrawalCandidate is a staked RSVP flagged for withdrawal.

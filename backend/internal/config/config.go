@@ -21,6 +21,19 @@ type TokenConfig struct {
 	AdminParty      string `json:"adminParty"`
 	InstrumentID    string `json:"instrumentId"`
 	RegistryBaseURL string `json:"registryBaseUrl"`
+	// Mintable marks a pure-Daml demo token (the SHOW DemoToken, 04 §1.7): it
+	// has no registry HTTP API, so the faucet mints it directly and the stake +
+	// settlement flows run in demo-token mode (empty ExtraArgs, no disclosed
+	// contracts, 05 §6c).
+	Mintable bool `json:"mintable,omitempty"`
+	// IssuerParty is the DemoIssuer signatory the faucet exercises Mint as (only
+	// meaningful when Mintable). For the SHOW token this equals AdminParty
+	// (instrumentId.admin = issuer, 04 §1.7). Empty falls back to the global
+	// FaucetIssuerParty, then AdminParty.
+	IssuerParty string `json:"issuerParty,omitempty"`
+	// FaucetURL is the external faucet the UI opens for a registry token (cBTC /
+	// cETH). Empty falls back to the BitSafe faucet (05 §6c).
+	FaucetURL string `json:"faucetUrl,omitempty"`
 }
 
 // KeycloakConfig holds the OpenID password-grant parameters used on
@@ -72,6 +85,17 @@ type Config struct {
 	// SeedDemoUsers, when true, idempotently ensures the 4 demo accounts exist
 	// at startup (Organizer/Alice/Bob/Charlie).
 	SeedDemoUsers bool
+
+	// DevFaucet gates POST /api/faucet (in-app test tokens, 05 §6c). Off in
+	// anything shared.
+	DevFaucet bool
+	// FaucetIssuerParty is the fallback DemoIssuer party the faucet mints as when
+	// a mintable token config carries no per-token issuerParty. Defaults to
+	// AppOperatorParty.
+	FaucetIssuerParty string
+	// FaucetAmount is the default mint amount when POST /api/faucet omits one
+	// (05 §6c, e.g. "1.0").
+	FaucetAmount string
 }
 
 // Load reads .env (if present) into the environment, then parses Config.
@@ -89,7 +113,14 @@ func Load(envPath string) (*Config, error) {
 		SequentialSettle: parseBool(os.Getenv("SETTLE_SEQUENTIAL_FALLBACK")),
 		DevQuickLogin:    parseBool(os.Getenv("DEV_QUICK_LOGIN")),
 		SeedDemoUsers:    parseBool(os.Getenv("SEED_DEMO_USERS")),
+		DevFaucet:        parseBool(os.Getenv("DEV_FAUCET")),
+		FaucetAmount:     getenvDefault("FAUCET_AMOUNT", "1.0"),
 	}
+
+	// Faucet issuer party: the DemoIssuer signatory the mint runs as. Defaults to
+	// appOperator so a single-party demo (appOperator == issuer) works out of the
+	// box; per-token issuerParty overrides it (05 §6c).
+	c.FaucetIssuerParty = getenvDefault("FAUCET_ISSUER_PARTY", c.AppOperatorParty)
 
 	// SETTLE_BUFFER default 24h.
 	buf := getenvDefault("SETTLE_BUFFER", "24h")
@@ -155,6 +186,20 @@ func (c *Config) TokenByAdminInstrument(admin, instrumentID string) (TokenConfig
 		}
 	}
 	return TokenConfig{}, false
+}
+
+// IsDemoTokenLabel reports whether the token with this label runs in
+// demo-token mode (mintable pure-Daml token, 05 §6c). Unknown label → false.
+func (c *Config) IsDemoTokenLabel(label string) bool {
+	t, ok := c.TokenByLabel(label)
+	return ok && t.Mintable
+}
+
+// IsDemoToken reports whether the (admin, instrumentId) token runs in
+// demo-token mode. Unknown token → false.
+func (c *Config) IsDemoToken(admin, instrumentID string) bool {
+	t, ok := c.TokenByAdminInstrument(admin, instrumentID)
+	return ok && t.Mintable
 }
 
 func getenvDefault(k, def string) string {

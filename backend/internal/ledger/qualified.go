@@ -30,6 +30,12 @@ const (
 	TplStakedRSVP    = "ShowOrSow:StakedRSVP"
 )
 
+// EntityDemoIssuer is the entity name of the mintable demo-token issuer (04
+// §1.7). It is matched by ENTITY name only (never module:entity) because the
+// demo-token package ships in its OWN DAR — deployed only in demo/dev — so the
+// backend does not carry its package id or module name (05 §6c).
+const EntityDemoIssuer = "DemoIssuer"
+
 // PackageQualifier is prepended to our template suffixes to form a full
 // templateId. On upload the backend learns the package id (or uses the
 // package-name form "#showorsow:…"). Configured via SHOWOROSOW_PACKAGE_ID env.
@@ -58,4 +64,16 @@ func MatchesTemplate(templateID, suffix string) bool {
 // suffix, ignoring package id.
 func MatchesInterface(interfaceID, suffix string) bool {
 	return MatchesTemplate(interfaceID, suffix)
+}
+
+// MatchesEntity reports whether a full templateId's ENTITY (the last
+// colon-separated segment) equals entity, ignoring both package id and module.
+// Used to match the demo-token DemoIssuer whose module name the backend does
+// not know (EntityDemoIssuer, 05 §6c).
+func MatchesEntity(templateID, entity string) bool {
+	i := strings.LastIndexByte(templateID, ':')
+	if i < 0 {
+		return templateID == entity
+	}
+	return templateID[i+1:] == entity
 }

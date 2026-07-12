@@ -148,12 +148,15 @@ func (s *Server) indexerLagMs(r *http.Request) int64 {
 	return hz.LagMs
 }
 
-// GET /api/config — unauthenticated probe → {devQuickLogin: boolean}. The
+// GET /api/config — unauthenticated probe → {devQuickLogin, devFaucet}. The
 // /login page reads this pre-session (GET /api/session 401s before login, so
-// the flag can't ride on it) to show/hide the demo quick-login strip (05 §2,
-// contract pinned with the web build). No session required by design.
+// the flags can't ride on it) to show/hide the demo quick-login strip and the
+// in-app faucet affordance (05 §2 / §6c). No session required by design.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"devQuickLogin": s.cfg.DevQuickLogin})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"devQuickLogin": s.cfg.DevQuickLogin,
+		"devFaucet":     s.cfg.DevFaucet,
+	})
 }
 
 // GET /api/tokens — configured tokens + live decimals from registry metadata.

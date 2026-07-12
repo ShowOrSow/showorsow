@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/showorsow/backend/internal/ledger"
+	"github.com/showorsow/backend/internal/registry"
 	"github.com/showorsow/backend/internal/store"
 )
 
@@ -103,21 +104,38 @@ type rsvpContext struct {
 // context — execute-transfer for ghosts, cancel for checked-in — and assemble
 // the (rsvpCid, extraArgs) settleItems payloads.
 func (r *Runner) buildSettleItems(ctx context.Context, ev *store.EventRow, items []StakedItem) ([]settleItem, map[string]rsvpContext, error) {
-	rc, err := r.d.Registry(ev.InstrumentAdmin, ev.InstrumentID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("registry client: %w", err)
+	// Demo-token mode (05 §6c / 04 §1.7): a pure-Daml demo token has no registry
+	// HTTP API — skip the per-RSVP ChoiceContext fetch entirely and pass an empty
+	// ExtraArgs with no disclosed contracts. The DemoAllocation choices
+	// (ExecuteTransfer / Cancel) that CloseEvent drives need no off-ledger
+	// context, so settlement runs entirely on-ledger.
+	demo := r.d.Cfg != nil && r.d.Cfg.IsDemoToken(ev.InstrumentAdmin, ev.InstrumentID)
+
+	var rc *registry.Client
+	if !demo {
+		var err error
+		rc, err = r.d.Registry(ev.InstrumentAdmin, ev.InstrumentID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("registry client: %w", err)
+		}
 	}
 
 	ctxByRsvp := map[string]rsvpContext{}
 	var out []settleItem
 	for _, it := range items {
-		kind := "execute-transfer" // ghost → slash
-		if it.CheckedIn {
-			kind = "cancel" // checked-in → refund
-		}
-		cc, err := rc.AllocationChoiceContext(ctx, it.AllocationCid, kind)
-		if err != nil {
-			return nil, nil, fmt.Errorf("choice-context %s for %s: %w", kind, ledger.ShortCid(it.AllocationCid), err)
+		var cc registry.ChoiceContext
+		if demo {
+			cc = registry.DemoChoiceContext()
+		} else {
+			kind := "execute-transfer" // ghost → slash
+			if it.CheckedIn {
+				kind = "cancel" // checked-in → refund
+			}
+			var err error
+			cc, err = rc.AllocationChoiceContext(ctx, it.AllocationCid, kind)
+			if err != nil {
+				return nil, nil, fmt.Errorf("choice-context %s for %s: %w", kind, ledger.ShortCid(it.AllocationCid), err)
+			}
 		}
 		extra := cc.ExtraArgs
 		if len(extra) == 0 {

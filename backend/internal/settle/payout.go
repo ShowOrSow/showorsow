@@ -153,6 +153,15 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 // acceptTransfer auto-accepts a pending payout TransferInstruction as the
 // recipient user party (05 §5.3).
 func (r *Runner) acceptTransfer(ctx context.Context, rc *registry.Client, ev *store.EventRow, recipientParty, instructionCid string) error {
+	return AcceptTransferInstruction(ctx, r.d.Ledger, rc, recipientParty, instructionCid, r.cmdID("payout-accept"))
+}
+
+// AcceptTransferInstruction fetches the accept ChoiceContext for a pending
+// TransferInstruction and exercises TransferInstruction_Accept as the receiving
+// party. This is the single accept code path shared by the payout runner
+// (05 §5.3) and the deposit acceptor (05 §6b) — same registry choice-context +
+// exercise, different callers/scope.
+func AcceptTransferInstruction(ctx context.Context, lc *ledger.Client, rc *registry.Client, receiverParty, instructionCid, commandID string) error {
 	cc, err := rc.TransferInstructionChoiceContext(ctx, instructionCid, "accept")
 	if err != nil {
 		return fmt.Errorf("accept choice-context: %w", err)
@@ -163,12 +172,12 @@ func (r *Runner) acceptTransfer(ctx context.Context, rc *registry.Client, ev *st
 	}
 	exArg, _ := json.Marshal(map[string]any{"extraArgs": json.RawMessage(extra)})
 	cmd := ledger.Command{ExerciseCommand: &ledger.ExerciseCommand{
-		TemplateID:     "#splice-api-token-transfer-instruction-v1:Splice.Api.Token.TransferInstructionV1:TransferInstruction",
+		TemplateID:     ledger.TransferInstructionInterfaceID,
 		ContractID:     instructionCid,
 		Choice:         "TransferInstruction_Accept",
 		ChoiceArgument: exArg,
 	}}
-	_, err = r.d.Ledger.SubmitAndWait(ctx, recipientParty, r.cmdID("payout-accept"), []ledger.Command{cmd}, cc.DisclosedContracts)
+	_, err = lc.SubmitAndWait(ctx, receiverParty, commandID, []ledger.Command{cmd}, cc.DisclosedContracts)
 	return err
 }
 

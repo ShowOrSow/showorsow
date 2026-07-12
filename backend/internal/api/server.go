@@ -146,6 +146,9 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/tokens", s.handleTokens)
 	mux.HandleFunc("GET /api/balances", s.handleBalances)
 
+	// Faucet (in-app test tokens, 05 §6c) — gated by DEV_FAUCET.
+	mux.HandleFunc("POST /api/faucet", s.handleFaucet)
+
 	// Events
 	mux.HandleFunc("POST /api/events", s.handleCreateEvent)
 	mux.HandleFunc("GET /api/events", s.handleListEvents)

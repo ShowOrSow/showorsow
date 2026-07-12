@@ -157,6 +157,26 @@ func firstRaw(a, b json.RawMessage) json.RawMessage {
 	return b
 }
 
+// ---- demo-token mode (05 §6c / 04 §1.7) ----
+
+// EmptyExtraArgs is the ExtraArgs value passed in demo-token mode: no
+// off-ledger context, no meta. A pure-Daml demo token (the SHOW DemoToken) has
+// no registry HTTP API, so the stake flow + settlement skip the ChoiceContext
+// fetch and pass this instead — the DemoAllocation choices need no registry
+// context (it mirrors the `noArgs` value the dpm test uses). The context field
+// is a ChoiceContext record ({"values":{}}), NOT Optional — a null fails the
+// Daml JSON decode (F9).
+func EmptyExtraArgs() json.RawMessage {
+	return json.RawMessage(`{"context":{"values":{}},"meta":{"values":{}}}`)
+}
+
+// DemoChoiceContext returns the ChoiceContext used in demo-token mode: empty
+// ExtraArgs and no disclosed contracts. Callers use it wherever they would
+// otherwise fetch a registry ChoiceContext for a demo token.
+func DemoChoiceContext() ChoiceContext {
+	return ChoiceContext{ExtraArgs: EmptyExtraArgs()}
+}
+
 // ---- Allocation factory discovery + Allocate choice context ----
 
 // allocationFactoryReq mirrors the token-standard allocation-factory request:

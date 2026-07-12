@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/showorsow/backend/internal/ledger"
+	"github.com/showorsow/backend/internal/registry"
 	"github.com/showorsow/backend/internal/settle"
 	"github.com/showorsow/backend/internal/store"
 	"github.com/showorsow/backend/internal/users"
@@ -191,9 +192,20 @@ func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
 // runAllocation performs §3 steps 3–5: registry discovery + Allocate as
 // attendee + RecordAllocation as appOperator.
 func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, attendeeParty, stakedCid string) error {
-	rc, err := s.registryFor(ev.InstrumentAdmin, ev.InstrumentID)
-	if err != nil {
-		return fmt.Errorf("registry client: %w", err)
+	// Demo-token mode (05 §6c / 04 §1.7): a pure-Daml demo token has no registry
+	// HTTP API, so we discover the on-ledger AllocationFactory directly and pass
+	// an empty ExtraArgs with no disclosed contracts instead of fetching a
+	// registry ChoiceContext. Everything else (AcceptRSVP → Allocate →
+	// RecordAllocation) is identical.
+	demo := s.cfg.IsDemoToken(ev.InstrumentAdmin, ev.InstrumentID)
+
+	var rc *registry.Client
+	if !demo {
+		var err error
+		rc, err = s.registryFor(ev.InstrumentAdmin, ev.InstrumentID)
+		if err != nil {
+			return fmt.Errorf("registry client: %w", err)
+		}
 	}
 
 	// §3.3 AllocationFactoryDiscovery + Allocate ChoiceContext. The allocation
@@ -221,14 +233,34 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 			"meta":         map[string]any{"values": map[string]any{}},
 		},
 	}
-	choiceArgs, _ := json.Marshal(map[string]any{"allocation": allocSpec})
 
-	cc, err := rc.AllocationFactoryDiscovery(ctx, choiceArgs)
-	if err != nil {
-		return fmt.Errorf("allocation-factory discovery: %w", err)
-	}
-	if cc.FactoryID == "" {
-		return fmt.Errorf("allocation-factory returned no factoryId")
+	var factoryID string
+	var extra json.RawMessage
+	var disclosed []ledger.DisclosedContract
+	if demo {
+		// Discover the DemoAllocationFactory on-ledger (the attendee is a sender on
+		// it, so it is visible under the attendee's own party); no registry fetch.
+		fid, err := s.allocationFactoryCid(ctx, attendeeParty)
+		if err != nil {
+			return fmt.Errorf("demo allocation-factory discovery: %w", err)
+		}
+		factoryID = fid
+		extra = registry.EmptyExtraArgs()
+	} else {
+		choiceArgs, _ := json.Marshal(map[string]any{"allocation": allocSpec})
+		cc, err := rc.AllocationFactoryDiscovery(ctx, choiceArgs)
+		if err != nil {
+			return fmt.Errorf("allocation-factory discovery: %w", err)
+		}
+		if cc.FactoryID == "" {
+			return fmt.Errorf("allocation-factory returned no factoryId")
+		}
+		factoryID = cc.FactoryID
+		extra = cc.ExtraArgs
+		if len(extra) == 0 {
+			extra = wrapExtra(cc.ChoiceContextData)
+		}
+		disclosed = cc.DisclosedContracts
 	}
 
 	// §3.4 AllocationFactory_Allocate as attendee, with input Holding cids +
@@ -238,10 +270,6 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 	holdingCids, err := s.holdingCids(ctx, attendeeParty, ev.InstrumentAdmin, ev.InstrumentID)
 	if err != nil {
 		return fmt.Errorf("gather holdings: %w", err)
-	}
-	extra := cc.ExtraArgs
-	if len(extra) == 0 {
-		extra = wrapExtra(cc.ChoiceContextData)
 	}
 	allocateArg, _ := json.Marshal(map[string]any{
 		"expectedAdmin":    ev.InstrumentAdmin,
@@ -256,10 +284,10 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 	allocResp, err := s.ledger.SubmitAndWait(ctx, attendeeParty, "allocate-"+newID(),
 		[]ledger.Command{{ExerciseCommand: &ledger.ExerciseCommand{
 			TemplateID:     ledger.AllocationFactoryInterfaceID,
-			ContractID:     cc.FactoryID,
+			ContractID:     factoryID,
 			Choice:         "AllocationFactory_Allocate",
 			ChoiceArgument: allocateArg,
-		}}}, cc.DisclosedContracts)
+		}}}, disclosed)
 	if err != nil {
 		return fmt.Errorf("AllocationFactory_Allocate: %w", err)
 	}
@@ -290,6 +318,28 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		return fmt.Errorf("RecordAllocation: %w", err)
 	}
 	return nil
+}
+
+// allocationFactoryCid discovers the on-ledger AllocationFactory contract id
+// visible to `party` (demo-token mode, 05 §6c). The DemoAllocationFactory
+// implements the AllocationFactory interface and lists attendees as senders, so
+// an ACS query under the attendee's own party returns it — no registry HTTP.
+func (s *Server) allocationFactoryCid(ctx context.Context, party string) (string, error) {
+	acs, err := s.ledger.ActiveContracts(ctx, party, []ledger.CumulativeFilter{{
+		InterfaceFilter: &ledger.InterfaceFilter{
+			InterfaceID:          ledger.AllocationFactoryInterfaceID,
+			IncludeInterfaceView: true,
+		},
+	}})
+	if err != nil {
+		return "", err
+	}
+	for _, ac := range acs {
+		if ac.CreatedEvent.ContractID != "" {
+			return ac.CreatedEvent.ContractID, nil
+		}
+	}
+	return "", errors.New("no AllocationFactory visible on-ledger (is the demo-token DAR deployed?)")
 }
 
 // pollAllocation polls appOperator's active Allocations for one whose
@@ -404,7 +454,10 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 	// record (TextMap), NOT Optional, so a null fails the Daml JSON decode (F9).
 	var extra json.RawMessage = json.RawMessage(`{"context":{"values":{}},"meta":{"values":{}}}`)
 	var disclosed []ledger.DisclosedContract
-	if rv.AllocationCID != "" {
+	// Demo-token mode: the DemoAllocation Cancel needs no registry context, so
+	// the empty ExtraArgs above is exactly right — skip the registry fetch (there
+	// is no registry HTTP API for a pure-Daml demo token, 05 §6c).
+	if rv.AllocationCID != "" && !s.cfg.IsDemoToken(ev.InstrumentAdmin, ev.InstrumentID) {
 		rc, err := s.registryFor(ev.InstrumentAdmin, ev.InstrumentID)
 		if err == nil {
 			if cc, err := rc.AllocationChoiceContext(ctx(r), rv.AllocationCID, "cancel"); err == nil {
