@@ -66,6 +66,30 @@ export interface AuthResult {
 // absent or errors — documented choice, see /login page + api.getConfig.
 export interface AppConfig {
   devQuickLogin: boolean;
+  // Faucet toggle (05 §6c, DEV_FAUCET). When false the Receive sheet still shows
+  // the deposit address but hides the "Get test tokens" buttons. Same probe as
+  // devQuickLogin — read pre- and post-session.
+  devFaucet?: boolean;
+}
+
+// POST /api/faucet {tokenLabel} → discriminated union (05 §6c):
+//  · mintable demo token  → {credited, newBalance} (credits instantly)
+//  · registry token (cBTC/cETH) → {external:true, url, party} (open ext. faucet)
+export interface FaucetCredited {
+  credited: boolean | string; // backend echoes the credited amount / flag
+  newBalance: string;
+}
+
+export interface FaucetExternal {
+  external: true;
+  url: string;
+  party: string;
+}
+
+export type FaucetResult = FaucetCredited | FaucetExternal;
+
+export function isFaucetExternal(r: FaucetResult): r is FaucetExternal {
+  return (r as FaucetExternal).external === true;
 }
 
 // A seeded demo account offered by the DEV quick-login strip. The backend only

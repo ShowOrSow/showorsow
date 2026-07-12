@@ -9,6 +9,7 @@ import type {
   CreateEventBody,
   EventDetail,
   EventListRow,
+  FaucetResult,
   LoginBody,
   MyRsvp,
   OrganizerRsvpRow,
@@ -106,6 +107,15 @@ export const api = {
   // Reference data
   getTokens: () => request<Token[]>("/api/tokens"),
   getBalances: () => request<Balance[]>("/api/balances"),
+
+  // Faucet (05 §6c) — mintable demo token credits instantly {credited,newBalance};
+  // registry tokens return {external,url,party} to open the external faucet.
+  // Gated by DEV_FAUCET (AppConfig.devFaucet) at the call site.
+  faucet: (tokenLabel: string) =>
+    request<FaucetResult>("/api/faucet", {
+      method: "POST",
+      json: { tokenLabel },
+    }),
 
   // Events
   getEvents: () => request<EventListRow[]>("/api/events"),

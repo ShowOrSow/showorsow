@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { useToast } from "../ToastProvider";
 import { useSession } from "../SessionProvider";
+import { useReceiveSheet } from "../ReceiveSheet";
 import { RsvpStatusChip } from "../StatusChip";
 import { SimulatedStepper, type StepperOutcome } from "../SimulatedStepper";
 import { LockCard } from "./LockCard";
@@ -38,6 +39,7 @@ export function AttendeePanel({
 }) {
   const { pushError, push } = useToast();
   const { user } = useSession();
+  const { openReceive } = useReceiveSheet();
   const myRsvp = detail.myRsvp;
   const ev = detail.event;
 
@@ -60,11 +62,14 @@ export function AttendeePanel({
     } catch (err) {
       setOutcome("error");
       if (err instanceof ApiError && err.status === 409 && err.stage === "balance") {
+        // The 409 balance toast links to the Receive sheet (08 §1) so the
+        // attendee can grab test tokens without leaving the flow.
         push({
           kind: "error",
           message: "Insufficient balance — get test tokens first.",
           stage: err.stage,
           errorId: err.errorId,
+          action: { label: "Get test tokens", onClick: openReceive },
         });
       } else {
         pushError(err, "Stake flow failed");

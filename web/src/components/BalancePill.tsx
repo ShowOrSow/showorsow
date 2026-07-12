@@ -5,11 +5,13 @@ import useSWR from "swr";
 import type { Balance } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
 import { useSession } from "./SessionProvider";
+import { useReceiveSheet } from "./ReceiveSheet";
 
 // BalancePill (08 §1): the logged-in user's per-token balance from
 // GET /api/balances (live Holdings, not DB). Flashes green/red after settlement.
 export function BalancePill() {
   const { user, isAuthenticated } = useSession();
+  const { openReceive } = useReceiveSheet();
   const { data } = useSWR<Balance[]>(
     isAuthenticated ? "/api/balances" : null,
     { refreshInterval: 4000 },
@@ -45,26 +47,33 @@ export function BalancePill() {
 
   // Data still loading / transient fetch error → neutral placeholder, NOT an
   // empty wallet (a mid-demo backend hiccup must not read as "no holdings").
+  // Clicking the pill opens the Receive sheet (deposit address + faucet) — 08 §1.
+  const pillBase =
+    "rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:border-faint";
+
   if (!data) {
     return (
-      <div className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-muted">
+      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted`}>
         <span className="mono text-faint">—</span>
-      </div>
+      </button>
     );
   }
 
   // Confirmed empty array = genuinely no holdings.
   if (data.length === 0) {
     return (
-      <div className="rounded-lg border border-line bg-surface px-3 py-1.5 text-sm text-muted">
+      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted`}>
         <span className="mono">no holdings</span>
-      </div>
+      </button>
     );
   }
 
   return (
-    <div
-      className={`flex items-center gap-3 rounded-lg border border-line bg-surface px-3 py-1.5 text-sm ${flash}`}
+    <button
+      type="button"
+      onClick={openReceive}
+      title="Receive tokens"
+      className={`flex items-center gap-3 ${pillBase} ${flash}`}
     >
       {data.map((b) => (
         <span key={b.instrumentId} className="flex items-center gap-1.5">
@@ -72,7 +81,7 @@ export function BalancePill() {
           <span className="text-muted">{instrumentShort(b.instrumentId)}</span>
         </span>
       ))}
-    </div>
+    </button>
   );
 }
 

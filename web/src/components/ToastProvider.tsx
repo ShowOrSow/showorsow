@@ -11,6 +11,9 @@ export interface Toast {
   message: string;
   stage?: string;
   errorId?: string;
+  // Optional inline action (e.g. the 409 insufficient-balance toast links to the
+  // Receive sheet — 08 §1). Clicking it dismisses the toast, then runs onClick.
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastCtx {
@@ -105,6 +108,17 @@ function ToastViewport({
                   {t.stage && t.errorId ? " · " : ""}
                   {t.errorId ? `errorId: ${t.errorId}` : ""}
                 </p>
+              )}
+              {t.action && (
+                <button
+                  onClick={() => {
+                    dismiss(t.id);
+                    t.action!.onClick();
+                  }}
+                  className="mt-2 rounded-md border border-gold/50 bg-gold/10 px-2.5 py-1 text-xs font-medium text-gold hover:bg-gold/20"
+                >
+                  {t.action.label}
+                </button>
               )}
             </div>
             <button
