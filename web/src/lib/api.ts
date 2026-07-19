@@ -1,5 +1,12 @@
 // Single typed API client mirroring 05-backend.md §2. ALL calls go to the Go
-// backend at NEXT_PUBLIC_API_URL — NEVER a direct ledger call from the browser.
+// backend — NEVER a direct ledger call from the browser.
+//
+// By default API_BASE is EMPTY, so the browser calls same-origin `/api/*` and
+// Next.js rewrites those to the real backend (next.config.ts: localhost:8080 in
+// dev, the VPS API_ORIGIN in prod). Same-origin means the session cookie
+// (SameSite=Lax) works and there is no CORS — this is what makes the Vercel↔VPS
+// split work (13-deployment). Set NEXT_PUBLIC_API_URL only to bypass the proxy
+// and call a cross-origin backend directly.
 
 import type {
   ApiErrorBody,
@@ -20,7 +27,7 @@ import type {
 } from "./types";
 
 export const API_BASE =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "http://localhost:8080";
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
 
 // Structured error carrying the backend's {stage, errorId} envelope so error
 // toasts stay debuggable on camera (08 §1).
