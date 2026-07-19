@@ -87,7 +87,8 @@ func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 		"rsvpDeadline":    rsvpDeadline.UTC().Format(time.RFC3339Nano),
 		"eventEnd":        eventEnd.UTC().Format(time.RFC3339Nano),
 		"settleBefore":    settleBefore.UTC().Format(time.RFC3339Nano),
-		"ended":           false,
+		// NB: no "ended" — that field lives on Event, set to False by EP_Accept in
+		// Daml. EventProposal has no such field; Canton 3.5 rejects unexpected keys.
 	})
 
 	// 1) EventProposal create as organizer.

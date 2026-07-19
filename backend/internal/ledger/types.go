@@ -208,10 +208,27 @@ type ActiveContract struct {
 	SynchronizerID string       `json:"synchronizerId,omitempty"`
 }
 
-// acsEnvelope wraps each streamed active-contracts entry.
+// acsEnvelope wraps each streamed active-contracts entry. Canton 3.5 nests the
+// active contract under contractEntry.JsActiveContract (a JsContractEntry sum
+// type); older previews used a flat "activeContract". We accept both.
+// IncompleteAssigned / IncompleteUnassigned are ignored for demo scale.
 type acsEnvelope struct {
-	ActiveContract *ActiveContract `json:"activeContract,omitempty"`
-	// IncompleteAssigned / IncompleteUnassigned ignored for demo scale.
+	ContractEntry  contractEntry   `json:"contractEntry,omitempty"`
+	ActiveContract *ActiveContract `json:"activeContract,omitempty"` // legacy flat shape
+}
+
+// contractEntry is the Canton 3.5 JsContractEntry wrapper; only the active
+// variant carries a contract we project.
+type contractEntry struct {
+	JsActiveContract *ActiveContract `json:"JsActiveContract,omitempty"`
+}
+
+// ac returns the effective ActiveContract from either shape, or nil.
+func (e acsEnvelope) ac() *ActiveContract {
+	if e.ContractEntry.JsActiveContract != nil {
+		return e.ContractEntry.JsActiveContract
+	}
+	return e.ActiveContract
 }
 
 // ---- Parties ----

@@ -44,6 +44,13 @@ func New(baseURL string, tokens TokenSource, hc *http.Client) *Client {
 // WithSynchronizer sets the synchronizer id attached to submissions.
 func (c *Client) WithSynchronizer(id string) *Client { c.synchronizerID = id; return c }
 
+// WithUserID sets the ledger-API user id sent on every command submission. On an
+// UNAUTHENTICATED sandbox (Canton 3.5) the JSON Ledger API cannot default the
+// user-id from a JWT and rejects a submission that omits it (INVALID_TOKEN:
+// "missing a user-id"), so a non-empty value is required there. On DevNet the
+// user-id is carried by the operator JWT, so this is left empty (env LEDGER_USER_ID).
+func (c *Client) WithUserID(id string) *Client { c.userID = id; return c }
+
 // APIError is a non-2xx response from the ledger API.
 type APIError struct {
 	StatusCode int
@@ -151,8 +158,8 @@ func parseACS(body []byte) ([]ActiveContract, error) {
 			return nil, fmt.Errorf("active-contracts decode: %w", err)
 		}
 		for _, e := range envs {
-			if e.ActiveContract != nil {
-				out = append(out, *e.ActiveContract)
+			if ac := e.ac(); ac != nil {
+				out = append(out, *ac)
 			}
 		}
 		return out, nil
@@ -167,8 +174,8 @@ func parseACS(body []byte) ([]ActiveContract, error) {
 			}
 			return nil, fmt.Errorf("active-contracts ndjson decode: %w", err)
 		}
-		if e.ActiveContract != nil {
-			out = append(out, *e.ActiveContract)
+		if ac := e.ac(); ac != nil {
+			out = append(out, *ac)
 		}
 	}
 	return out, nil

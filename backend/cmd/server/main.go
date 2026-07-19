@@ -66,6 +66,11 @@ func main() {
 	if sync := os.Getenv("SYNCHRONIZER_ID"); sync != "" {
 		lc = lc.WithSynchronizer(sync)
 	}
+	// LEDGER_USER_ID is required on the unauthenticated sandbox (Canton 3.5 rejects
+	// submissions with no user-id); on DevNet it comes from the JWT, so leave unset.
+	if uid := os.Getenv("LEDGER_USER_ID"); uid != "" {
+		lc = lc.WithUserID(uid)
+	}
 
 	// Users: account CRUD + signup party allocation (the ledger client is the
 	// party allocator; appOperator authorises /v2/parties).
