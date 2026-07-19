@@ -175,21 +175,37 @@ template DemoAllocationFactory
           (spec.transferLeg.instrumentId.admin == admin)
         assertMsg "Instrument id must be SHOW"
           (spec.transferLeg.instrumentId.id == "SHOW")
-        -- Consume the sender's funding holdings. inputHoldingCids are Holding-interface
-        -- cids; in this self-contained package the only implementation is DemoHolding, so
-        -- coerce back to the concrete cid to fetch + archive (issuer authority is present
-        -- via the factory signatory, so the archive is authorized).
-        forA_ arg.inputHoldingCids $ \hcid -> do
+        -- Consume the sender's funding holdings, summing their amounts. inputHoldingCids
+        -- are Holding-interface cids; in this self-contained package the only
+        -- implementation is DemoHolding, so coerce back to the concrete cid to fetch +
+        -- archive (issuer authority is present via the factory signatory).
+        amounts <- forA arg.inputHoldingCids $ \hcid -> do
           let concreteCid = fromInterfaceContractId @DemoHolding hcid
           h <- fetch concreteCid
           assertMsg "Funding holding not owned by the leg sender"
             (h.owner == spec.transferLeg.sender)
           archive concreteCid
+          pure h.amount
+        let funded = sum amounts
+            amount = spec.transferLeg.amount
+        assertMsg "Insufficient funding holdings for the allocation" (funded >= amount)
         allocCid <- create DemoAllocation with admin, spec
+        -- Return change (funded - amount) to the sender as a fresh issuer-signed
+        -- DemoHolding, so staking never zeroes the wallet (real registry tokens do
+        -- the same). senderChangeCids carries it back to the caller.
+        changeCids <-
+          if funded > amount
+            then do
+              chg <- create DemoHolding with
+                issuer = admin
+                owner = spec.transferLeg.sender
+                amount = funded - amount
+              pure [toInterfaceContractId chg]
+            else pure []
         pure AllocationInstructionResult with
           output = AllocationInstructionResult_Completed with
             allocationCid = toInterfaceContractId allocCid
-          senderChangeCids = []
+          senderChangeCids = changeCids
           meta = emptyMetadata
 
       allocationFactory_publicFetchImpl _self arg = do
