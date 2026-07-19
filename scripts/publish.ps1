@@ -31,14 +31,14 @@ if (-not (Test-Path (Join-Path $work '.git'))) {
   if ($LASTEXITCODE -ne 0) { throw "pull failed" }
 }
 
-$folders = @('daml', 'daml-test', 'daml-demo', 'backend', 'indexer', 'web', 'scripts')
+$folders = @('daml', 'daml-test', 'daml-demo', 'backend', 'indexer', 'web', 'scripts', 'deploy')
 foreach ($f in $folders) {
   # /MIR mirrors (incl. deletions); exclude build junk and secrets.
   robocopy (Join-Path $src $f) (Join-Path $work $f) /MIR /NFL /NDL /NJH /NJS `
     /XD node_modules .next dist .daml /XF .env | Out-Null
   if ($LASTEXITCODE -ge 8) { throw "robocopy failed for $f (code $LASTEXITCODE)" }
 }
-foreach ($f in @('README.md', 'LICENSE', '.gitignore', '.env.example')) {
+foreach ($f in @('README.md', 'LICENSE', '.gitignore', '.env.example', '.env.production.example')) {
   Copy-Item (Join-Path $src $f) (Join-Path $work $f) -Force
 }
 

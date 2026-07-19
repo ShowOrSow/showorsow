@@ -1,0 +1,19 @@
+# systemd unit for the TypeScript indexer (read-only ledger → Neon projector).
+# Install to /etc/systemd/system/. Runs the compiled dist/main.js under Node.
+[Unit]
+Description=ShowOrSow indexer (ledger stream → Neon projections)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=showorsow
+WorkingDirectory=/opt/showorsow/repo/indexer
+EnvironmentFile=/opt/showorsow/.env
+# deploy.sh runs `pnpm build` → dist/main.js. Node 22+ required.
+ExecStart=/usr/bin/node dist/main.js
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
