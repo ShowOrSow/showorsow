@@ -86,6 +86,20 @@ type Config struct {
 	// at startup (Organizer/Alice/Bob/Charlie).
 	SeedDemoUsers bool
 
+	// LedgerOperatorJWT, when set, is a single participant-wide Bearer token used
+	// for EVERY party's ledger submission (DevNet: our participant hosts all user
+	// parties and one operator token with broad actAs acts as them, 13-deployment).
+	// Empty → per-party behavior (only appOperator carries a token; the sandbox is
+	// unauthenticated).
+	LedgerOperatorJWT string
+	// LedgerOperatorWide, when true (and no static LedgerOperatorJWT), applies the
+	// appOperator Keycloak-refreshed token to EVERY party (DevNet operator mode
+	// with token refresh).
+	LedgerOperatorWide bool
+	// CookieSecure sets the Secure flag on the session cookie (production behind
+	// HTTPS / the Vercel same-origin proxy). Off for plain-HTTP local dev.
+	CookieSecure bool
+
 	// DevFaucet gates POST /api/faucet (in-app test tokens, 05 §6c). Off in
 	// anything shared.
 	DevFaucet bool
@@ -105,16 +119,19 @@ func Load(envPath string) (*Config, error) {
 	}
 
 	c := &Config{
-		ListenAddr:       getenvDefault("LISTEN_ADDR", ":8080"),
-		LedgerJSONAPIURL: strings.TrimRight(os.Getenv("LEDGER_JSON_API_URL"), "/"),
-		IndexerHealthURL: strings.TrimRight(getenvDefault("INDEXER_HEALTH_URL", ""), "/"),
-		NeonDatabaseURL:  os.Getenv("NEON_DATABASE_URL"),
-		AppOperatorParty: os.Getenv("PARTY_APPOPERATOR"),
-		SequentialSettle: parseBool(os.Getenv("SETTLE_SEQUENTIAL_FALLBACK")),
-		DevQuickLogin:    parseBool(os.Getenv("DEV_QUICK_LOGIN")),
-		SeedDemoUsers:    parseBool(os.Getenv("SEED_DEMO_USERS")),
-		DevFaucet:        parseBool(os.Getenv("DEV_FAUCET")),
-		FaucetAmount:     getenvDefault("FAUCET_AMOUNT", "1.0"),
+		ListenAddr:         getenvDefault("LISTEN_ADDR", ":8080"),
+		LedgerJSONAPIURL:   strings.TrimRight(os.Getenv("LEDGER_JSON_API_URL"), "/"),
+		IndexerHealthURL:   strings.TrimRight(getenvDefault("INDEXER_HEALTH_URL", ""), "/"),
+		NeonDatabaseURL:    os.Getenv("NEON_DATABASE_URL"),
+		AppOperatorParty:   os.Getenv("PARTY_APPOPERATOR"),
+		SequentialSettle:   parseBool(os.Getenv("SETTLE_SEQUENTIAL_FALLBACK")),
+		DevQuickLogin:      parseBool(os.Getenv("DEV_QUICK_LOGIN")),
+		SeedDemoUsers:      parseBool(os.Getenv("SEED_DEMO_USERS")),
+		DevFaucet:          parseBool(os.Getenv("DEV_FAUCET")),
+		FaucetAmount:       getenvDefault("FAUCET_AMOUNT", "1.0"),
+		LedgerOperatorJWT:  os.Getenv("LEDGER_OPERATOR_JWT"),
+		LedgerOperatorWide: parseBool(os.Getenv("LEDGER_OPERATOR_WIDE")),
+		CookieSecure:       parseBool(os.Getenv("COOKIE_SECURE")),
 	}
 
 	// Faucet issuer party: the DemoIssuer signatory the mint runs as. Defaults to

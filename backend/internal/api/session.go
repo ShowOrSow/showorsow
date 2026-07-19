@@ -53,6 +53,7 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, userID int64) {
 		Value:    s.signSession(userID),
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Now().Add(24 * time.Hour),
 	})
@@ -65,6 +66,7 @@ func (s *Server) clearSessionCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   s.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0),

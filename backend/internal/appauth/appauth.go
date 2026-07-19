@@ -49,10 +49,28 @@ func New(cfg *config.Config, hc *http.Client) *TokenSource {
 // is the intended unauthenticated mode; on DevNet, per-user JWTs are a
 // documented limitation (05 §2).
 func (t *TokenSource) TokenByParty(ctx context.Context, party string) (string, error) {
+	// DevNet operator mode (13-deployment): a single participant-wide token acts
+	// as EVERY hosted party. A static LEDGER_OPERATOR_JWT wins; otherwise, when
+	// LedgerOperatorWide is set, the appOperator Keycloak-refreshed token is
+	// applied to all parties.
+	if t.cfg.LedgerOperatorJWT != "" {
+		return t.cfg.LedgerOperatorJWT, nil
+	}
+	if t.cfg.LedgerOperatorWide {
+		return t.appOperatorToken(ctx)
+	}
+
+	// Per-party mode (sandbox / MVP): only the appOperator party carries a token;
+	// every other party resolves to "" (no Authorization header).
 	if party == "" || t.cfg.AppOperatorParty == "" || party != t.cfg.AppOperatorParty {
 		return "", nil
 	}
+	return t.appOperatorToken(ctx)
+}
 
+// appOperatorToken returns the appOperator Bearer token: a static JWT if set,
+// else a Keycloak-refreshed token, else "" (unauthenticated sandbox).
+func (t *TokenSource) appOperatorToken(ctx context.Context) (string, error) {
 	auth := t.cfg.AppOperator
 	// Static JWT wins (pre-minted / sandbox with a fixed token).
 	if auth.StaticJWT != "" {
