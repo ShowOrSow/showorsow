@@ -120,7 +120,7 @@ export function AttendeePanel({
       case "invited":
         return (
           <div className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-5">
-            <p className="text-sm text-muted">
+            <p className="text-sm text-muted-foreground">
               You're invited. Stake{" "}
               <span className="mono font-semibold text-gold">
                 {formatAmount(ev.stakeAmount)} {ev.tokenLabel}
@@ -144,7 +144,7 @@ export function AttendeePanel({
                   myRsvp.inviteCid &&
                   simpleAction(() => api.decline(myRsvp.inviteCid!), "Decline")
                 }
-                className="rounded-lg border border-line px-4 py-2 text-sm text-muted hover:text-text disabled:opacity-50"
+                className="rounded-lg border border-line px-4 py-2 text-sm text-muted-foreground hover:text-text disabled:opacity-50"
               >
                 Decline
               </button>
@@ -232,7 +232,7 @@ function StaticNote({
       className={`rounded-xl border bg-surface p-5 text-sm ${
         tone === "warn"
           ? "border-slash/40 text-slash"
-          : "border-line text-muted"
+          : "border-line text-muted-foreground"
       }`}
     >
       {children}

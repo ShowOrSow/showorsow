@@ -25,18 +25,18 @@ export default function ResultsPage({
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="mx-auto flex max-w-5xl flex-col gap-5 px-4 py-8 sm:px-6">
       <div>
         <Link
           href={`/events/${enc}`}
-          className="text-sm text-muted hover:text-text"
+          className="text-sm text-muted-foreground hover:text-text"
         >
           ← Event
         </Link>
         <h1 className="mt-2 text-xl font-semibold">
           {detail?.event.title ?? "Settlement"} · Results
         </h1>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           Refunds, slashes, and pot redistribution — settled on-ledger.
         </p>
       </div>

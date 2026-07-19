@@ -30,7 +30,7 @@ export function LockCard({
             </span>{" "}
             locked until settlement.
           </p>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-1 text-xs text-muted-foreground">
             Refunded when you check in at the venue. If you no-show, it funds the
             people who came.
           </p>
@@ -42,7 +42,7 @@ export function LockCard({
           <button
             disabled={busy}
             onClick={onCancel}
-            className="rounded-lg border border-line px-4 py-2 text-sm text-muted hover:text-text disabled:opacity-50"
+            className="rounded-lg border border-line px-4 py-2 text-sm text-muted-foreground hover:text-text disabled:opacity-50"
           >
             Cancel RSVP
           </button>

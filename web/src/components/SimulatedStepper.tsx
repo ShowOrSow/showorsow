@@ -81,7 +81,7 @@ export function SimulatedStepper({
           );
         })}
       </ol>
-      {caption && <p className="mt-3 text-xs italic text-muted">{caption}</p>}
+      {caption && <p className="mt-3 text-xs italic text-muted-foreground">{caption}</p>}
     </div>
   );
 }

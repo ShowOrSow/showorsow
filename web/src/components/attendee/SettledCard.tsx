@@ -30,7 +30,7 @@ export function SettledCard({
           <p className="text-sm font-semibold text-text">
             {refunded ? "Refunded" : "Slashed"}
           </p>
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             {refunded
               ? "You checked in — stake returned, plus your share of the pot."
               : "You didn't check in — your stake was redistributed to attendees who showed."}
@@ -40,9 +40,9 @@ export function SettledCard({
 
       {delta && (
         <div className="flex items-center gap-2 border-t border-line pt-3 text-sm">
-          <span className="text-muted">Balance delta</span>
+          <span className="text-muted-foreground">Balance delta</span>
           <DeltaBadge before={delta.before} after={delta.after} />
-          <span className="text-muted">{tokenLabel}</span>
+          <span className="text-muted-foreground">{tokenLabel}</span>
         </div>
       )}
     </div>

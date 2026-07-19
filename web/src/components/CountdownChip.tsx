@@ -23,11 +23,11 @@ export function CountdownChip({
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
-        expired ? "border-faint/60 text-muted" : "border-line text-text"
+        expired ? "border-faint/60 text-muted-foreground" : "border-line text-text"
       }`}
       title={new Date(deadline).toLocaleString()}
     >
-      <span className="text-muted">{label}</span>
+      <span className="text-muted-foreground">{label}</span>
       <span className="mono">{expired ? "closed" : t}</span>
     </span>
   );

@@ -77,13 +77,13 @@ export function InvitePanel({
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold">Invitees</h3>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted">
+          <span className="text-xs text-muted-foreground">
             {rows.length} {rows.length === 1 ? "person" : "people"}
           </span>
           <button
             type="button"
             onClick={copyLink}
-            className="rounded-lg border border-line px-2.5 py-1 text-xs text-muted hover:border-faint hover:text-text"
+            className="rounded-lg border border-line px-2.5 py-1 text-xs text-muted-foreground hover:border-faint hover:text-text"
           >
             {copied ? "Copied ✓" : "Copy event link"}
           </button>
@@ -111,7 +111,7 @@ export function InvitePanel({
 
       <ul className="flex flex-col divide-y divide-line">
         {rows.length === 0 && (
-          <li className="py-3 text-sm text-muted">No invites yet.</li>
+          <li className="py-3 text-sm text-muted-foreground">No invites yet.</li>
         )}
         {rows.map((r) => {
           const display = r.attendeeName || r.attendeeEmail || r.attendeeParty;
@@ -133,7 +133,7 @@ export function InvitePanel({
                     {display}
                   </span>
                   {r.attendeeEmail && r.attendeeName && (
-                    <span className="block truncate text-xs text-muted">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {r.attendeeEmail}
                     </span>
                   )}

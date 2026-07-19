@@ -66,7 +66,7 @@ export function AccountMenu() {
           {avatarInitial(user.name, user.email)}
         </span>
         <span className="hidden font-medium sm:inline">{user.name}</span>
-        <span className="text-muted">▾</span>
+        <span className="text-muted-foreground">▾</span>
       </button>
 
       {open && (
@@ -88,7 +88,7 @@ export function AccountMenu() {
                 <p className="truncate text-sm font-medium text-text">
                   {user.name}
                 </p>
-                <p className="truncate text-xs text-muted">{user.email}</p>
+                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
               </div>
             </div>
             <div className="px-4 py-2.5">
@@ -96,7 +96,7 @@ export function AccountMenu() {
                 Canton party
               </p>
               <p
-                className="mono mt-0.5 text-xs text-muted"
+                className="mono mt-0.5 text-xs text-muted-foreground"
                 title={user.partyId}
               >
                 {truncatePartyId(user.partyId)}

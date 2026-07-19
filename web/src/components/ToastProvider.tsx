@@ -103,7 +103,7 @@ function ToastViewport({
             <div className="min-w-0">
               <p className="text-sm text-text">{t.message}</p>
               {(t.stage || t.errorId) && (
-                <p className="mono mt-1 text-xs text-muted">
+                <p className="mono mt-1 text-xs text-muted-foreground">
                   {t.stage ? `stage: ${t.stage}` : ""}
                   {t.stage && t.errorId ? " · " : ""}
                   {t.errorId ? `errorId: ${t.errorId}` : ""}
@@ -123,7 +123,7 @@ function ToastViewport({
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="shrink-0 text-muted hover:text-text"
+              className="shrink-0 text-muted-foreground hover:text-text"
               aria-label="Dismiss"
             >
               ✕

@@ -25,28 +25,28 @@ export function EventCard({ row }: { row: EventListRow }) {
         <EventStatusChip status={ev.status} />
       </div>
 
-      {ev.venue && <p className="text-sm text-muted">{ev.venue}</p>}
+      {ev.venue && <p className="text-sm text-muted-foreground">{ev.venue}</p>}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/5 px-2 py-0.5 text-xs">
           <span className="mono font-semibold text-gold">
             {formatAmount(ev.stakeAmount)}
           </span>
-          <span className="text-muted">{ev.tokenLabel}</span>
+          <span className="text-muted-foreground">{ev.tokenLabel}</span>
         </span>
         <CountdownChip deadline={ev.rsvpDeadline} />
       </div>
 
       <div className="mt-1 flex items-center justify-between border-t border-line pt-3 text-xs">
         {organizer ? (
-          <span className="text-muted">
+          <span className="text-muted-foreground">
             headcount{" "}
             <span className="mono font-semibold text-text">
               {row.headcount ?? 0}
             </span>
           </span>
         ) : row.myStatus ? (
-          <span className="flex items-center gap-1.5 text-muted">
+          <span className="flex items-center gap-1.5 text-muted-foreground">
             your RSVP <RsvpStatusChip status={row.myStatus} />
           </span>
         ) : (

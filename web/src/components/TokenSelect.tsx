@@ -15,7 +15,7 @@ export function TokenSelect({
 
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-muted" htmlFor="token">
+      <label className="text-sm text-muted-foreground" htmlFor="token">
         Token
       </label>
       <select

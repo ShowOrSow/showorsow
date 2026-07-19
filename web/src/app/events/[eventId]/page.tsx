@@ -34,16 +34,22 @@ export default function EventDetailPage({
   );
 
   if (isLoading) {
-    return <div className="h-64 animate-pulse rounded-xl border border-line bg-surface" />;
+    return (
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="h-64 animate-pulse rounded-2xl border border-line bg-surface" />
+      </div>
+    );
   }
 
   if (error || !data) {
     return (
-      <div className="rounded-xl border border-slash/40 bg-surface p-6">
-        <p className="text-sm text-slash">Could not load this event.</p>
-        <Link href="/events" className="mt-3 inline-block text-sm text-gold">
-          ← Back to events
-        </Link>
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
+        <div className="rounded-2xl border border-slash/30 bg-surface p-6">
+          <p className="text-sm text-slash">Could not load this event.</p>
+          <Link href="/events" className="mt-3 inline-block text-sm text-gold">
+            ← Back to events
+          </Link>
+        </div>
       </div>
     );
   }
@@ -51,15 +57,15 @@ export default function EventDetailPage({
   const ev = data.event;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
       <div>
-        <Link href="/events" className="text-sm text-muted hover:text-text">
+        <Link href="/events" className="text-sm text-muted-foreground hover:text-text">
           ← Events
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">{ev.title}</h1>
-            {ev.venue && <p className="text-sm text-muted">{ev.venue}</p>}
+            {ev.venue && <p className="text-sm text-muted-foreground">{ev.venue}</p>}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <EventStatusChip status={ev.status} />
@@ -67,16 +73,16 @@ export default function EventDetailPage({
           </div>
         </div>
         {ev.description && (
-          <p className="mt-3 max-w-2xl text-sm text-muted">{ev.description}</p>
+          <p className="mt-3 max-w-2xl text-sm text-muted-foreground">{ev.description}</p>
         )}
         <div className="mt-3 flex flex-wrap gap-4 text-sm">
-          <span className="text-muted">
+          <span className="text-muted-foreground">
             Stake{" "}
             <span className="mono font-semibold text-gold">
               {formatAmount(ev.stakeAmount)} {ev.tokenLabel}
             </span>
           </span>
-          <span className="text-muted">
+          <span className="text-muted-foreground">
             Ends{" "}
             <span className="text-text">{formatDateTime(ev.eventEnd)}</span>
           </span>

@@ -92,13 +92,13 @@ function Stat({
 }) {
   return (
     <div className="rounded-xl border border-line bg-surface p-4">
-      <p className="text-xs text-muted">
+      <p className="text-xs text-muted-foreground">
         {label}
         {hint && <span className="text-faint"> · {hint}</span>}
       </p>
       <p className="mt-1 flex items-baseline gap-1">
         <span className="mono text-xl font-semibold text-text">{value}</span>
-        {unit && <span className="text-xs text-muted">{unit}</span>}
+        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
       </p>
     </div>
   );

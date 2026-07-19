@@ -88,7 +88,7 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
           <h1 className="text-xl font-semibold">
             {isSignup ? "Create your account" : "Welcome back"}
           </h1>
-          <p className="mt-1 text-sm text-muted">
+          <p className="mt-1 text-sm text-muted-foreground">
             {isSignup
               ? "Stake to RSVP, get refunded when you show up."
               : "Sign in to your ShowOrSow account."}
@@ -135,7 +135,7 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
         </Field>
 
         {isSignup && (
-          <p className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2.5 text-xs text-muted">
+          <p className="rounded-lg border border-gold/30 bg-gold/5 px-3 py-2.5 text-xs text-muted-foreground">
             Creating your account also creates your private Canton identity
             (party).
           </p>
@@ -156,7 +156,7 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
         </button>
       </form>
 
-      <p className="text-center text-sm text-muted">
+      <p className="text-center text-sm text-muted-foreground">
         {isSignup ? (
           <>
             Already have an account?{" "}
@@ -213,7 +213,7 @@ function DevQuickLogin({ onDone }: { onDone: () => Promise<void> }) {
         <span className="rounded border border-info/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-info">
           dev
         </span>
-        <p className="text-xs text-muted">
+        <p className="text-xs text-muted-foreground">
           Demo accounts — one-click login for the walkthrough.
         </p>
       </div>
@@ -254,7 +254,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-muted">{label}</label>
+      <label className="text-sm text-muted-foreground">{label}</label>
       {children}
     </div>
   );

@@ -53,7 +53,7 @@ export function BalancePill() {
 
   if (!data) {
     return (
-      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted`}>
+      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted-foreground`}>
         <span className="mono text-faint">—</span>
       </button>
     );
@@ -62,7 +62,7 @@ export function BalancePill() {
   // Confirmed empty array = genuinely no holdings.
   if (data.length === 0) {
     return (
-      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted`}>
+      <button type="button" onClick={openReceive} title="Receive tokens" className={`${pillBase} text-muted-foreground`}>
         <span className="mono">no holdings</span>
       </button>
     );
@@ -78,7 +78,7 @@ export function BalancePill() {
       {data.map((b) => (
         <span key={b.instrumentId} className="flex items-center gap-1.5">
           <span className="mono font-semibold text-gold">{formatAmount(b.amount)}</span>
-          <span className="text-muted">{instrumentShort(b.instrumentId)}</span>
+          <span className="text-muted-foreground">{instrumentShort(b.instrumentId)}</span>
         </span>
       ))}
     </button>

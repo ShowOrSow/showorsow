@@ -30,7 +30,7 @@ export function SettlementResults({ pkg }: { pkg: SettlementPackage }) {
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           No payout rows — either nobody checked in or nothing was slashed (pot
           keeps funds).
         </p>
@@ -38,7 +38,7 @@ export function SettlementResults({ pkg }: { pkg: SettlementPackage }) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
-              <tr className="text-left text-xs text-muted">
+              <tr className="text-left text-xs text-muted-foreground">
                 <th className="pb-2 font-medium">Attendee</th>
                 <th className="pb-2 font-medium">Outcome</th>
                 <th className="pb-2 font-medium">Payout</th>
@@ -102,7 +102,7 @@ function ResultRow({
                   className={`text-xs ${
                     row.payoutStatus === "accepted"
                       ? "text-refund"
-                      : "text-muted"
+                      : "text-muted-foreground"
                   }`}
                 >
                   {row.payoutStatus}

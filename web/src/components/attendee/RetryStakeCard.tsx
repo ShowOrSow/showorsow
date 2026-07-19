@@ -21,7 +21,7 @@ export function RetryStakeCard({
           <p className="text-sm font-medium text-text">
             RSVP accepted, stake not locked yet.
           </p>
-          <p className="mt-1 text-xs text-muted">
+          <p className="mt-1 text-xs text-muted-foreground">
             The allocation step didn't complete. Your seat isn't held until the
             stake locks — retry to finish.
           </p>

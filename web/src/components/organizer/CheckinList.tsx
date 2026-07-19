@@ -51,11 +51,11 @@ export function CheckinList({
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
       <div className="flex items-center justify-between">
         <h3 className="font-semibold">Check-in</h3>
-        <span className="text-xs text-muted">at the venue · one-way</span>
+        <span className="text-xs text-muted-foreground">at the venue · one-way</span>
       </div>
 
       {staked.length === 0 ? (
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           No staked attendees yet. Only staked RSVPs can be checked in.
         </p>
       ) : (

@@ -103,7 +103,7 @@ export function EventForm() {
             required
           />
           {token && (
-            <span className="whitespace-nowrap text-sm text-muted">
+            <span className="whitespace-nowrap text-sm text-muted-foreground">
               {token.label} · {token.decimals} dp
             </span>
           )}
@@ -145,7 +145,7 @@ export function EventForm() {
         <button
           type="button"
           onClick={() => router.push("/events")}
-          className="rounded-lg border border-line px-4 py-2 text-sm text-muted hover:text-text"
+          className="rounded-lg border border-line px-4 py-2 text-sm text-muted-foreground hover:text-text"
         >
           Cancel
         </button>
@@ -168,7 +168,7 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-muted">
+      <label className="text-sm text-muted-foreground">
         {label}
         {required && <span className="text-gold"> *</span>}
       </label>

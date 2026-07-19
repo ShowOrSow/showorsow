@@ -66,7 +66,7 @@ export function SettleButton({
     <div className="flex flex-col gap-3 rounded-xl border border-slash/30 bg-surface p-5">
       <div>
         <h3 className="font-semibold text-text">Close Event &amp; Settle</h3>
-        <p className="text-sm text-muted">
+        <p className="text-sm text-muted-foreground">
           Refunds check-ins, slashes ghosts, redistributes the pot. This is final
           and on-ledger.
         </p>
@@ -94,7 +94,7 @@ export function SettleButton({
             </button>
             <button
               onClick={() => setConfirming(false)}
-              className="rounded-lg border border-line px-4 py-2 text-sm text-muted hover:text-text"
+              className="rounded-lg border border-line px-4 py-2 text-sm text-muted-foreground hover:text-text"
             >
               Cancel
             </button>
