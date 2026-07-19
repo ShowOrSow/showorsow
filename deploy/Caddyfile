@@ -1,11 +1,12 @@
 # Caddy reverse proxy for the ShowOrSow VPS — auto-TLS (Let's Encrypt).
 # Exposes the Go backend over HTTPS so Vercel's /api/* rewrite can proxy to it.
-# Replace api.showorsow.example with your real subdomain (an A record → VPS IP).
+# Uses the Hostinger-provided hostname (resolves to the VPS IP out of the box),
+# so no custom domain / A record is needed for the live demo.
 #
 #   sudo caddy run --config /opt/showorsow/deploy/Caddyfile
 # (or install as a service: sudo caddy add-package / systemd caddy.service)
 
-api.showorsow.example {
+srv1330754.hstgr.cloud {
 	encode zstd gzip
 	# The backend's own CORS allowlist still applies; the browser reaches this
 	# host only through Vercel's same-origin rewrite, so requests are same-site.
