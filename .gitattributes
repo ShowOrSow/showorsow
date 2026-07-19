@@ -1,0 +1,6 @@
+# Shell scripts and Linux service files must stay LF — a CRLF shebang breaks on
+# the VPS. Keep PowerShell as-is (Windows).
+*.sh            text eol=lf
+*.service       text eol=lf
+Caddyfile       text eol=lf
+*.ps1           text eol=crlf
