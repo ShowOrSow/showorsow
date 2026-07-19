@@ -112,7 +112,14 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// §3.2 AcceptRSVP(currentEventCid) as attendee → StakedRSVP cid.
+	// §3.2 AcceptRSVP(currentEventCid) as attendee → StakedRSVP cid. AcceptRSVP
+	// fetches the Event, which the attendee cannot see (no observers) — so we
+	// disclose it explicitly from appOperator's view.
+	eventDisc, err := s.disclosedEvent(ctx(r), ev.ContractID)
+	if err != nil {
+		writeErr502(w, "accept-rsvp", "", err)
+		return
+	}
 	arg, _ := json.Marshal(map[string]any{"currentEventCid": ev.ContractID})
 	acceptResp, err := s.ledger.SubmitAndWait(ctx(r), attendeeParty, "accept-"+newID(),
 		[]ledger.Command{{ExerciseCommand: &ledger.ExerciseCommand{
@@ -120,7 +127,7 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 			ContractID:     inviteCid,
 			Choice:         "AcceptRSVP",
 			ChoiceArgument: arg,
-		}}}, nil)
+		}}}, []ledger.DisclosedContract{eventDisc})
 	if err != nil {
 		writeErr502(w, "accept-rsvp", "", err)
 		return
@@ -324,6 +331,32 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 // visible to `party` (demo-token mode, 05 §6c). The DemoAllocationFactory
 // implements the AllocationFactory interface and lists attendees as senders, so
 // an ACS query under the attendee's own party returns it — no registry HTTP.
+// disclosedEvent fetches the Event contract's disclosure (createdEventBlob) as
+// appOperator — a signatory who can see it — so it can be handed to an attendee's
+// AcceptRSVP submission. The Event has NO observers by design (privacy), so the
+// attendee-controlled AcceptRSVP choice, which `fetch`es currentEventCid, would
+// otherwise fail CONTRACT_NOT_FOUND. Explicit disclosure is the sanctioned way to
+// let a non-stakeholder use a contract in a choice.
+func (s *Server) disclosedEvent(ctx context.Context, eventCid string) (ledger.DisclosedContract, error) {
+	acs, err := s.ledger.ActiveContracts(ctx, s.cfg.AppOperatorParty, []ledger.CumulativeFilter{{
+		WildcardFilter: &ledger.WildcardFilter{IncludeCreatedEventBlob: true},
+	}})
+	if err != nil {
+		return ledger.DisclosedContract{}, err
+	}
+	for _, ac := range acs {
+		if ac.CreatedEvent.ContractID == eventCid {
+			return ledger.DisclosedContract{
+				TemplateID:       ac.CreatedEvent.TemplateID,
+				ContractID:       ac.CreatedEvent.ContractID,
+				CreatedEventBlob: ac.CreatedEvent.CreatedEventBlob,
+				SynchronizerID:   ac.SynchronizerID,
+			}, nil
+		}
+	}
+	return ledger.DisclosedContract{}, errors.New("event contract not visible to appOperator for disclosure")
+}
+
 func (s *Server) allocationFactoryCid(ctx context.Context, party string) (string, error) {
 	acs, err := s.ledger.ActiveContracts(ctx, party, []ledger.CumulativeFilter{{
 		InterfaceFilter: &ledger.InterfaceFilter{
