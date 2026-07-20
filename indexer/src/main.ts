@@ -34,6 +34,11 @@ async function main(): Promise<void> {
       await projector.apply(u);
       lastUpdateAt = Date.now();
     },
+    // Idle ledger ≠ stale indexer: a successful no-op poll also counts as fresh,
+    // otherwise the frontend's "data syncing…" badge sticks on quiet periods.
+    onSynced: () => {
+      lastUpdateAt = Date.now();
+    },
     currentOffset: () => projector.getLastOffset(),
     onError: (e) => {
       console.error('[feed] error:', e instanceof Error ? e.message : e);

@@ -23,6 +23,10 @@ export interface FeedCallbacks {
   onUpdate(u: LedgerUpdate): Promise<void>;
   /** Called when the feeder needs the current begin offset (after reconnect). */
   currentOffset(): string | undefined;
+  /** Called after each successful sync with the ledger, even when no updates
+   *  arrived (a poll tick that found nothing new). Lets healthz report
+   *  "caught up" instead of ever-growing lag on an idle ledger. */
+  onSynced?(): void;
   onError?(e: unknown): void;
 }
 

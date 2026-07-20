@@ -207,6 +207,7 @@ export function startPollFeed(cfg: Config, cb: FeedCallbacks): FeedHandle {
         if (update) await cb.onUpdate(update);
         prev = next;
       }
+      cb.onSynced?.();
     } catch (e) {
       cb.onError?.(e);
     } finally {
