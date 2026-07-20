@@ -23,13 +23,13 @@ export function AccountMenu() {
       <div className="flex items-center gap-2">
         <Link
           href="/login"
-          className="rounded-lg border border-line px-3 py-1.5 text-sm text-text hover:border-faint"
+          className="rounded-full px-3.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-secondary hover:text-text"
         >
           Log in
         </Link>
         <Link
           href="/signup"
-          className="rounded-lg bg-gold px-3 py-1.5 text-sm font-semibold text-ink hover:brightness-95"
+          className="rounded-full bg-primary px-3.5 py-1.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           Sign up
         </Link>

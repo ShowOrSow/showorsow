@@ -5,6 +5,7 @@ import type { EventListRow } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
 import { EventStatusChip, RsvpStatusChip } from "./StatusChip";
 import { CountdownChip } from "./CountdownChip";
+import { MapPin, Users, ArrowUpRight, Coins } from "lucide-react";
 
 // EventCard (08 §4): title, token badge, stake, RSVP-deadline countdown, status
 // chip, headcount (organizer only). Role is per-event now (no global persona):
@@ -16,20 +17,24 @@ export function EventCard({ row }: { row: EventListRow }) {
   return (
     <Link
       href={`/events/${encodeURIComponent(ev.eventId)}`}
-      className="group flex flex-col gap-3 rounded-xl border border-line bg-surface p-4 transition-colors hover:border-faint"
+      className="group flex flex-col gap-3 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-refund/40 hover:shadow-[0_10px_30px_-18px_rgba(5,150,105,0.35)]"
     >
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="font-semibold leading-snug text-text group-hover:text-gold">
-          {ev.title}
-        </h3>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="font-semibold leading-snug text-text">{ev.title}</h3>
         <EventStatusChip status={ev.status} />
       </div>
 
-      {ev.venue && <p className="text-sm text-muted-foreground">{ev.venue}</p>}
+      {ev.venue && (
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="size-3.5 shrink-0" />
+          {ev.venue}
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 rounded-full border border-gold/40 bg-gold/5 px-2 py-0.5 text-xs">
-          <span className="mono font-semibold text-gold">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs">
+          <Coins className="size-3.5 text-refund" />
+          <span className="mono font-semibold text-refund">
             {formatAmount(ev.stakeAmount)}
           </span>
           <span className="text-muted-foreground">{ev.tokenLabel}</span>
@@ -37,13 +42,14 @@ export function EventCard({ row }: { row: EventListRow }) {
         <CountdownChip deadline={ev.rsvpDeadline} />
       </div>
 
-      <div className="mt-1 flex items-center justify-between border-t border-line pt-3 text-xs">
+      <div className="mt-auto flex items-center justify-between border-t border-line pt-3 text-xs">
         {organizer ? (
-          <span className="text-muted-foreground">
-            headcount{" "}
+          <span className="flex items-center gap-1.5 text-muted-foreground">
+            <Users className="size-3.5" />
             <span className="mono font-semibold text-text">
               {row.headcount ?? 0}
             </span>
+            attending
           </span>
         ) : row.myStatus ? (
           <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -52,7 +58,10 @@ export function EventCard({ row }: { row: EventListRow }) {
         ) : (
           <span className="text-faint">invited</span>
         )}
-        <span className="text-faint group-hover:text-gold">open →</span>
+        <span className="flex items-center gap-0.5 text-faint transition-colors group-hover:text-refund">
+          open
+          <ArrowUpRight className="size-3.5" />
+        </span>
       </div>
     </Link>
   );
