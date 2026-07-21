@@ -1,5 +1,6 @@
 "use client";
 
+import { tokenLabelOf } from "@/lib/format";
 import { useState } from "react";
 import type {
   OrganizerEventDetail,
@@ -40,11 +41,11 @@ export function OrganizerPanel({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Headcount" value={String(stats.headcount)} hint="staked" />
         <Stat label="Checked in" value={String(stats.checkedInCount)} />
-        <Stat label="TVL" value={formatAmount(stats.tvl)} unit={ev.tokenLabel} />
+        <Stat label="TVL" value={formatAmount(stats.tvl)} unit={tokenLabelOf(ev)} />
         <Stat
           label="Pot balance"
           value={formatAmount(stats.potBalance)}
-          unit={ev.tokenLabel}
+          unit={tokenLabelOf(ev)}
         />
       </div>
 

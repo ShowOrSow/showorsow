@@ -43,3 +43,10 @@ export function toIsoFromLocalInput(v: string): string {
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
+
+/** Display label for an event's token: the backend event payloads don't carry
+ *  tokenLabel (it's a request-side field), so fall back to instrumentId
+ *  ("SHOW"), which is the user-facing symbol for our tokens. */
+export function tokenLabelOf(ev: { tokenLabel?: string; instrumentId?: string }): string {
+  return ev.tokenLabel || ev.instrumentId || "";
+}

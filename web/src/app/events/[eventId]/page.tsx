@@ -93,24 +93,28 @@ export default function EventDetailPage({
 
         <div className="flex min-w-0 flex-col gap-7">
           <EventTitleBlock ev={ev} meta={data.meta} />
-
-          {organizer ? (
-            <OrganizerPanel
-              detail={data}
-              settlement={settlement}
-              onMutate={() => void mutate()}
-            />
-          ) : (
+          {!organizer && (
             <RsvpCard
               detail={data}
               settlement={settlement}
               onMutate={() => void mutate()}
             />
           )}
-
           <EventAbout ev={ev} meta={data.meta} />
         </div>
       </div>
+
+      {/* Organizer manage panels get the full width below the header block —
+          the invitee + check-in lists are too wide for the right column. */}
+      {organizer && (
+        <div className="mt-10 border-t border-line pt-8">
+          <OrganizerPanel
+            detail={data}
+            settlement={settlement}
+            onMutate={() => void mutate()}
+          />
+        </div>
+      )}
     </div>
   );
 }

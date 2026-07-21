@@ -1,6 +1,7 @@
 "use client";
 
 import type { EventCore, EventMeta } from "@/lib/types";
+import { tokenLabelOf } from "@/lib/format";
 import { MapPin, Ticket } from "lucide-react";
 
 // Luma-anatomy event page building blocks (verified against luma.com):
@@ -69,7 +70,7 @@ export function EventSideCard({ ev, meta }: { ev: EventCore; meta?: EventMeta })
       <p className="border-t border-line pt-4 text-xs leading-relaxed text-faint">
         Stake-to-attend on Canton — reserve with{" "}
         <span className="mono text-muted-foreground">
-          {ev.stakeAmount ? `${Number(ev.stakeAmount)} ${ev.tokenLabel}` : ev.tokenLabel}
+          {`${Number(ev.stakeAmount)} ${tokenLabelOf(ev)}`}
         </span>
         , refunded when you show up.
       </p>

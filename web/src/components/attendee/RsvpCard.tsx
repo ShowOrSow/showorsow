@@ -9,6 +9,7 @@ import type {
   SettlementPackage,
   User,
 } from "@/lib/types";
+import { tokenLabelOf } from "@/lib/format";
 import { useToast } from "../ToastProvider";
 import { useSession } from "../SessionProvider";
 import { useReceiveSheet } from "../ReceiveSheet";
@@ -59,7 +60,7 @@ export function RsvpCard({
   const [outcome, setOutcome] = useState<StepperOutcome>("pending");
 
   const beforeDeadline = new Date(ev.rsvpDeadline).getTime() > Date.now();
-  const stakeLabel = `${formatAmount(ev.stakeAmount)} ${ev.tokenLabel}`;
+  const stakeLabel = `${formatAmount(ev.stakeAmount)} ${tokenLabelOf(ev)}`;
 
   async function runStake(fn: () => Promise<MyRsvp>) {
     setStepping(true);
@@ -262,7 +263,7 @@ export function RsvpCard({
           <SettledCard
             checkedIn={myRsvp.checkedIn}
             delta={findMyDelta(settlement?.deltas, user)}
-            tokenLabel={ev.tokenLabel}
+            tokenLabel={tokenLabelOf(ev)}
           />
         );
 

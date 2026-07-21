@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import type { EventListRow } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
+import { tokenLabelOf } from "@/lib/format";
 import { EventStatusChip, RsvpStatusChip } from "@/components/StatusChip";
 import { coverFor, hostLabel } from "@/components/EventHero";
 import { Button } from "@/components/ui/button";
@@ -166,7 +167,7 @@ function TimelineCard({ row }: { row: EventListRow }) {
             <span className="mono font-semibold text-refund">
               {formatAmount(ev.stakeAmount)}
             </span>
-            <span className="text-muted-foreground">{ev.tokenLabel} stake</span>
+            <span className="text-muted-foreground">{tokenLabelOf(ev)} stake</span>
           </span>
           <EventStatusChip status={ev.status} />
           {organizer ? (
