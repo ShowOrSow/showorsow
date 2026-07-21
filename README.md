@@ -138,7 +138,6 @@ indexer/      TypeScript — ledger update stream → Postgres projections (E1�
               exactly-once (offset + batch in one transaction), poll fallback
 web/          Next.js 15 — role-adaptive event page (organizer check-in/settle vs
               attendee stake state machine), persona switcher, settlement results
-scripts/      fetch-dars.ps1 (token-standard DARs) · seed-event.ps1 (demo seed)
 ```
 
 ## Getting started
@@ -149,8 +148,8 @@ scripts/      fetch-dars.ps1 (token-standard DARs) · seed-event.ps1 (demo seed)
 # 0. Configure
 cp .env.example .env        # fill: ledger URL, DB URL, party ids, token config
 
-# 1. Contracts
-pwsh scripts/fetch-dars.ps1 # fetch the six splice token-standard DARs into daml/lib/
+# 1. Contracts — place the six splice-api-token-*-v1 DARs (hyperledger-labs/
+#    splice, token-standard/) into daml/lib/ first
 cd daml && dpm build        # compile
 cd ../daml-test && dpm test # full suite incl. privacy assertions — no network needed
 
