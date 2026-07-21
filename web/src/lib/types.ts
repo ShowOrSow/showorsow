@@ -120,6 +120,8 @@ export interface EventCore {
   title: string;
   description?: string;
   venue?: string;
+  /** Organizer's Canton party (backend sends it; hint prefix = display name). */
+  organizerParty?: string;
   tokenLabel: string;
   instrumentId?: string;
   decimals?: number;

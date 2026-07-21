@@ -475,6 +475,17 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusForbidden, "not your rsvp")
 		return
 	}
+	// Check-in commits the stake to settlement — cancel is no longer allowed
+	// (mirrors the Daml CancelRSVP assert; this guard gives a clean 409 instead
+	// of a ledger error, and covers pre-0.2.0 StakedRSVPs too).
+	if rv.CheckedIn {
+		writeJSON(w, http.StatusConflict, errBody{
+			Error: "already checked in",
+			Stage: "cancel",
+			Detail: "you're checked in — your stake is committed and will be refunded at settlement",
+		})
+		return
+	}
 	ev, err := s.store.GetEvent(ctx(r), rv.EventID)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

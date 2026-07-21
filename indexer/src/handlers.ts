@@ -205,11 +205,22 @@ function handleCreate(
     if (s.withdrawn) {
       // E9 — withdrawn=true.
       status = 'withdrawn';
-    } else if (s.allocationCid !== null) {
-      // E7 — allocationCid = Some _ → stake locked.
+    } else if (s.allocationCid !== null || s.checkedIn) {
+      // E7 — allocationCid = Some _ → stake locked. checkedIn also implies a
+      // locked stake (Daml CheckIn asserts allocationCid /= None), which matters
+      // when the poll-ACS Optional parse misses the cid on a check-in recreate:
+      // without this, a stale terminal status (e.g. 'cancelled') survives while
+      // the contract is demonstrably live + checked in.
       status = 'staked';
-    } else if (prior === undefined || prior.status === 'invited') {
-      // E5 — first StakedRSVP off an invite → accepted (allocationCid still None).
+    } else if (
+      prior === undefined ||
+      prior.status === 'invited' ||
+      prior.status === 'cancelled' ||
+      prior.status === 'declined'
+    ) {
+      // E5 — a live StakedRSVP means the RSVP is active: fresh accept off an
+      // invite, or a re-accept after a projected cancel/decline (self-healing —
+      // a create for a row in a terminal state can only mean it's active again).
       status = 'accepted';
     }
     // E8 — checkedIn changed with no status transition: leave status as-is, just patch checked_in.

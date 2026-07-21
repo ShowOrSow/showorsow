@@ -300,6 +300,9 @@ template StakedRSVP
                 pure ()
 
     -- Attendee cancels their own RSVP before the deadline; releases the allocation.
+    -- A checked-in attendee may NOT cancel: check-in commits the stake to the
+    -- settlement (their refund happens there), otherwise an attendee could
+    -- check in and still pull their stake back out before the organizer settles.
     choice CancelRSVP : ()
       with
         extraArgs : ExtraArgs
@@ -307,6 +310,7 @@ template StakedRSVP
       do
         now <- getTime
         assertMsg "RSVP deadline has passed" (now < rsvpDeadline)
+        assertMsg "Already checked in — stake is committed to settlement" (not checkedIn)
         case allocationCid of
           None -> pure ()
           Some cid -> do
