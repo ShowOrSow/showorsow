@@ -6,6 +6,7 @@ import type { Balance } from "@/lib/types";
 import { formatAmount } from "@/lib/api";
 import { useSession } from "./SessionProvider";
 import { useReceiveSheet } from "./ReceiveSheet";
+import { TokenLogo } from "./TokenLogo";
 
 // BalancePill (08 §1): the logged-in user's per-token balance from
 // GET /api/balances (live Holdings, not DB). Flashes green/red after settlement.
@@ -77,6 +78,7 @@ export function BalancePill() {
     >
       {data.map((b) => (
         <span key={b.instrumentId} className="flex items-center gap-1.5">
+          <TokenLogo label={instrumentShort(b.instrumentId)} size={16} />
           <span className="mono font-semibold text-gold">{formatAmount(b.amount)}</span>
           <span className="text-muted-foreground">{instrumentShort(b.instrumentId)}</span>
         </span>

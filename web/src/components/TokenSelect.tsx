@@ -2,8 +2,19 @@
 
 import useSWR from "swr";
 import type { Token } from "@/lib/types";
+import { TokenLogo } from "./TokenLogo";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// TokenSelect (08 §4): GET /api/tokens, shows live decimals from registry metadata.
+// TokenSelect (08 §4): GET /api/tokens, shows the instrument's official mark
+// plus live decimals read from the registry metadata. The list is pure config —
+// adding cBTC/cETH is an env change, never a code change.
 export function TokenSelect({
   value,
   onChange,
@@ -14,29 +25,36 @@ export function TokenSelect({
   const { data, isLoading } = useSWR<Token[]>("/api/tokens");
 
   return (
-    <div className="flex flex-col gap-1">
-      <label className="text-sm text-muted-foreground" htmlFor="token">
-        Token
-      </label>
-      <select
-        id="token"
-        value={value}
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor="token">Token</Label>
+      <Select
+        value={value || undefined}
         disabled={isLoading}
-        onChange={(e) => {
-          const label = e.target.value;
-          onChange(label, data?.find((t) => t.label === label));
-        }}
-        className="rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-gold"
+        onValueChange={(label) =>
+          onChange(label, data?.find((t) => t.label === label))
+        }
       >
-        <option value="" disabled>
-          {isLoading ? "Loading tokens…" : "Select a token"}
-        </option>
-        {data?.map((t) => (
-          <option key={t.label} value={t.label}>
-            {t.label} · {t.decimals} decimals
-          </option>
-        ))}
-      </select>
+        <SelectTrigger id="token" className="w-full">
+          <SelectValue
+            placeholder={isLoading ? "Loading tokens…" : "Select a token"}
+          />
+        </SelectTrigger>
+        <SelectContent>
+          {data?.map((t) => (
+            <SelectItem key={t.label} value={t.label}>
+              <span className="flex items-center gap-2">
+                <TokenLogo label={t.label} size={18} />
+                <span className="font-medium">{t.label}</span>
+                {t.decimals >= 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t.decimals} decimals
+                  </span>
+                )}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

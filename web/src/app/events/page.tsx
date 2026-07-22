@@ -8,6 +8,7 @@ import { formatAmount } from "@/lib/api";
 import { tokenLabelOf } from "@/lib/format";
 import { EventStatusChip, RsvpStatusChip } from "@/components/StatusChip";
 import { coverFor, hostLabel } from "@/components/EventHero";
+import { TokenLogo } from "@/components/TokenLogo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MapPin, Plus, Ticket, Users } from "lucide-react";
@@ -164,6 +165,7 @@ function TimelineCard({ row }: { row: EventListRow }) {
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-xs">
+            <TokenLogo label={tokenLabelOf(ev)} size={14} />
             <span className="mono font-semibold text-refund">
               {formatAmount(ev.stakeAmount)}
             </span>

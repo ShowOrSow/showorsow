@@ -13,7 +13,10 @@ import (
 
 // bitSafeFaucetURL is the default external faucet the UI opens for a registry
 // token (cBTC / cETH) that carries no per-token faucetUrl (05 §6c).
-const bitSafeFaucetURL = "https://faucet.bitsafe.dev/"
+// Self-serve cBTC DevNet faucet. (The older faucet.bitsafe.dev host no longer
+// resolves — verified 2026-07-23 — so a token configured without an explicit
+// faucetUrl used to send the user to a dead domain.)
+const bitSafeFaucetURL = "https://cbtc-faucet.bitsafe.finance/"
 
 // faucetResp is the POST /api/faucet response. Exactly one of the two shapes is
 // populated: the mint result {credited, newBalance} for a mintable demo token,

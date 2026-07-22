@@ -10,6 +10,7 @@ import type {
   User,
 } from "@/lib/types";
 import { tokenLabelOf } from "@/lib/format";
+import { TokenLogo } from "../TokenLogo";
 import { useToast } from "../ToastProvider";
 import { useSession } from "../SessionProvider";
 import { useReceiveSheet } from "../ReceiveSheet";
@@ -163,6 +164,17 @@ export function RsvpCard({
               <span className="mono font-semibold text-refund">{stakeLabel}</span>
               , show up and check in, and it comes straight back.
             </p>
+            <div className="flex items-center gap-2.5 rounded-xl border border-line bg-accent/40 px-3 py-2.5">
+              <TokenLogo label={tokenLabelOf(ev)} size={26} />
+              <div className="leading-tight">
+                <p className="mono text-sm font-semibold text-text">
+                  {stakeLabel}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  locked in {tokenLabelOf(ev)} escrow, not held by us
+                </p>
+              </div>
+            </div>
             {user && (
               <div className="flex items-center gap-2.5 border-t border-line pt-3">
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-refund">

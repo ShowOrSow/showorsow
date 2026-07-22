@@ -10,6 +10,7 @@ import {
 import useSWR, { useSWRConfig } from "swr";
 import { api } from "@/lib/api";
 import { isFaucetExternal, type AppConfig, type Token } from "@/lib/types";
+import { TokenLogo } from "./TokenLogo";
 import { useSession } from "./SessionProvider";
 import { useToast } from "./ToastProvider";
 
@@ -196,9 +197,17 @@ function ReceiveSheet({ onClose }: { onClose: () => void }) {
                   key={t.instrumentId || t.label}
                   className="flex items-center justify-between gap-3 rounded-lg border border-line bg-surface-2 px-3 py-2"
                 >
-                  <span className="min-w-0">
-                    <span className="mono block truncate text-sm font-medium text-text">
-                      {t.label}
+                  <span className="flex min-w-0 items-center gap-2">
+                    <TokenLogo label={t.label} size={22} />
+                    <span className="min-w-0">
+                      <span className="mono block truncate text-sm font-medium text-text">
+                        {t.label}
+                      </span>
+                      {t.decimals >= 0 && (
+                        <span className="block text-xs text-muted-foreground">
+                          {t.decimals} decimals
+                        </span>
+                      )}
                     </span>
                   </span>
                   <button
