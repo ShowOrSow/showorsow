@@ -5,6 +5,7 @@ import { formatAmount } from "@/lib/api";
 import { tokenLabelOf } from "@/lib/format";
 import { TokenLogo } from "./TokenLogo";
 import { Lock, ShieldCheck } from "lucide-react";
+import { CountUp } from "./reactbits/CountUp";
 
 // VaultCard — the escrow, made visible. Stakes are NOT held by this app: each
 // one is a CIP-56 Allocation locked registry-side until settleBefore, so the
@@ -96,7 +97,15 @@ function VaultStat({
         <span
           className={`mono text-xl font-semibold tabular-nums ${accent ? "text-refund" : "text-text"}`}
         >
-          {value}
+          {/* React Bits CountUp for plain numbers; compound values ("2/3") render as-is. */}
+          {Number.isFinite(Number(value)) ? (
+            <CountUp
+              to={Number(value)}
+              decimals={value.includes(".") ? value.split(".")[1].length : 0}
+            />
+          ) : (
+            value
+          )}
         </span>
         {token && (
           <span className="text-sm text-muted-foreground">{token}</span>

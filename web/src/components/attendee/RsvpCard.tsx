@@ -11,6 +11,7 @@ import type {
 } from "@/lib/types";
 import { tokenLabelOf } from "@/lib/format";
 import { TokenLogo } from "../TokenLogo";
+import { CheckinPass } from "./CheckinPass";
 import { useToast } from "../ToastProvider";
 import { useSession } from "../SessionProvider";
 import { useReceiveSheet } from "../ReceiveSheet";
@@ -244,6 +245,9 @@ export function RsvpCard({
               <span className="mono font-semibold text-text">{stakeLabel}</span>{" "}
               locked in escrow — refunded when you check in at the event.
             </InfoRow>
+            {user?.partyId && (
+              <CheckinPass eventId={ev.eventId} attendeeParty={user.partyId} />
+            )}
             {beforeDeadline && (
               <button
                 disabled={busy || !myRsvp.rsvpCid}

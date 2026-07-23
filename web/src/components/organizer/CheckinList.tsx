@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import type { OrganizerRsvpRow } from "@/lib/types";
 import { avatarColor, avatarInitial } from "@/lib/identity";
 import { useToast } from "../ToastProvider";
+import { ScanCheckin } from "./ScanCheckin";
 
 // CheckinList (08 §4, latching): one row per STAKED attendee with a latching
 // "Check in" button — ONE-WAY, no un-check (the ledger choice is one-way by
@@ -49,9 +50,12 @@ export function CheckinList({
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="font-semibold">Check-in</h3>
-        <span className="text-xs text-muted-foreground">at the venue · one-way</span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">at the venue · one-way</span>
+          <ScanCheckin eventId={eventId} disabled={disabled} onMutate={onMutate} />
+        </div>
       </div>
 
       {staked.length === 0 ? (

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/components/SessionProvider";
+import { BlurText } from "@/components/reactbits/BlurText";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -40,9 +41,12 @@ export default function Home() {
               Built on Canton Network
             </Badge>
 
+            {/* React Bits BlurText — words blur-settle in sequence; the emerald
+                segment keeps its color by rendering as its own delayed segment. */}
             <h1 className="text-balance text-4xl font-semibold tracking-tight text-text sm:text-5xl lg:text-6xl">
-              Events people{" "}
-              <span className="text-refund">actually show up</span> to.
+              <BlurText text="Events people" />{" "}
+              <BlurText text="actually show up" delay={0.12} className="text-refund" />{" "}
+              <BlurText text="to." delay={0.3} />
             </h1>
 
             <p className="max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
