@@ -59,7 +59,7 @@ type instrumentsResp struct {
 // InstrumentMetadata fetches the registry instrument list. decimals are read
 // live here — never hardcoded (03 §1).
 func (c *Client) InstrumentMetadata(ctx context.Context) ([]Instrument, error) {
-	body, err := c.get(ctx, "/registry/metadata/v1/instruments")
+	body, err := c.get(ctx, "/metadata/v1/instruments")
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +123,27 @@ type rawDisclosed struct {
 }
 
 func (r *registryChoiceContextResp) toChoiceContext() ChoiceContext {
+	// Factory endpoints (verified live against the DA Utility registry) nest the
+	// context: {factoryId, choiceContext: {choiceContextData, disclosedContracts}}.
+	// Per-instruction choice-contexts endpoints return both fields top-level. If
+	// choiceContext decodes as that envelope, lift its fields before falling back
+	// to treating it as bare context data.
+	if len(r.ChoiceContext) > 0 {
+		var nested struct {
+			ChoiceContextData  json.RawMessage `json:"choiceContextData"`
+			DisclosedContracts []rawDisclosed  `json:"disclosedContracts"`
+		}
+		if err := json.Unmarshal(r.ChoiceContext, &nested); err == nil &&
+			(len(nested.ChoiceContextData) > 0 || len(nested.DisclosedContracts) > 0) {
+			if len(r.ChoiceContextData) == 0 {
+				r.ChoiceContextData = nested.ChoiceContextData
+			}
+			if len(r.DisclosedContracts) == 0 {
+				r.DisclosedContracts = nested.DisclosedContracts
+			}
+			r.ChoiceContext = nil
+		}
+	}
 	cc := ChoiceContext{
 		ExtraArgs:         r.ExtraArgs,
 		ChoiceContextData: firstRaw(r.ChoiceContextData, r.ChoiceContext),
@@ -193,7 +214,7 @@ type allocationFactoryReq struct {
 // context for a sender answering an AllocationRequest. `choiceArgs` is the
 // caller-built AllocationFactory_Allocate argument record (allocation spec).
 func (c *Client) AllocationFactoryDiscovery(ctx context.Context, choiceArgs json.RawMessage) (ChoiceContext, error) {
-	body, err := c.post(ctx, "/registry/allocations/v1/allocation-factory", allocationFactoryReq{
+	body, err := c.post(ctx, "/allocation-instruction/v1/allocation-factory", allocationFactoryReq{
 		ChoiceArguments: choiceArgs,
 	})
 	if err != nil {
@@ -211,7 +232,7 @@ func (c *Client) AllocationFactoryDiscovery(ctx context.Context, choiceArgs json
 // settlement (05 §4) via GET/POST
 // /registry/allocations/v1/{allocationId}/choice-contexts/{kind}.
 func (c *Client) AllocationChoiceContext(ctx context.Context, allocationID, kind string) (ChoiceContext, error) {
-	path := fmt.Sprintf("/registry/allocations/v1/%s/choice-contexts/%s", allocationID, kind)
+	path := fmt.Sprintf("/allocations/v1/%s/choice-contexts/%s", allocationID, kind)
 	body, err := c.post(ctx, path, map[string]any{})
 	if err != nil {
 		return ChoiceContext{}, err
@@ -237,7 +258,7 @@ type transferFactoryReq struct {
 // pot → recipient payout. `choiceArgs` is the TransferFactory_Transfer arg
 // record (with the meta stamp already embedded by the caller, 05 §5).
 func (c *Client) TransferFactory(ctx context.Context, expectedAdmin string, choiceArgs json.RawMessage) (ChoiceContext, error) {
-	body, err := c.post(ctx, "/registry/transfer-instruction/v1/transfer-factory", transferFactoryReq{
+	body, err := c.post(ctx, "/transfer-instruction/v1/transfer-factory", transferFactoryReq{
 		ExpectedAdmin:   expectedAdmin,
 		ChoiceArguments: choiceArgs,
 	})
@@ -254,7 +275,7 @@ func (c *Client) TransferFactory(ctx context.Context, expectedAdmin string, choi
 // TransferInstructionChoiceContext fetches the accept/reject/withdraw choice
 // context for a pending TransferInstruction (payout two-step accept, 05 §5).
 func (c *Client) TransferInstructionChoiceContext(ctx context.Context, instructionID, kind string) (ChoiceContext, error) {
-	path := fmt.Sprintf("/registry/transfer-instruction/v1/%s/choice-contexts/%s", instructionID, kind)
+	path := fmt.Sprintf("/transfer-instruction/v1/%s/choice-contexts/%s", instructionID, kind)
 	body, err := c.post(ctx, path, map[string]any{})
 	if err != nil {
 		return ChoiceContext{}, err

@@ -86,6 +86,41 @@ func HoldingAmounts(ctx context.Context, lc *ledger.Client, party, admin, instru
 	return holdingAmountsWhere(ctx, lc, party, admin, instrumentID, false)
 }
 
+// HoldingCids returns the SPENDABLE Holding contract ids matching (owner,
+// admin, instrumentId). The real registry requires inputHoldingCids on
+// TransferFactory_Transfer / AllocationFactory_Allocate (verified live on
+// DevNet — it does not re-derive them server-side).
+func HoldingCids(ctx context.Context, lc *ledger.Client, party, admin, instrumentID string) ([]string, error) {
+	acs, err := lc.ActiveContracts(ctx, party, []ledger.CumulativeFilter{{
+		InterfaceFilter: &ledger.InterfaceFilter{
+			InterfaceID:          ledger.HoldingInterfaceID,
+			IncludeInterfaceView: true,
+		},
+	}})
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, ac := range acs {
+		raw, ok := ac.InterfaceViewValue("Splice.Api.Token.HoldingV1:Holding")
+		if !ok {
+			continue
+		}
+		var v holdingViewValue
+		if err := json.Unmarshal(raw, &v); err != nil {
+			continue
+		}
+		if v.Owner != party || v.InstrumentID.Admin != admin || v.InstrumentID.ID != instrumentID {
+			continue
+		}
+		if IsLocked(v.Lock) {
+			continue
+		}
+		out = append(out, ac.CreatedEvent.ContractID)
+	}
+	return out, nil
+}
+
 // holdingAmountsWhere is the shared Holding query; includeLocked selects the
 // TOTAL basis (snapshots) vs the SPENDABLE basis (everything else).
 func holdingAmountsWhere(ctx context.Context, lc *ledger.Client, party, admin, instrumentID string, includeLocked bool) ([]string, error) {

@@ -241,6 +241,15 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		},
 	}
 
+	// Holdings are gathered BEFORE factory discovery: the real registry's
+	// allocation-factory endpoint validates inputHoldingCids in the discovery
+	// request itself (verified live on DevNet — an empty list is rejected with
+	// "No holdings provided").
+	holdingCids, err := s.holdingCids(ctx, attendeeParty, ev.InstrumentAdmin, ev.InstrumentID)
+	if err != nil {
+		return fmt.Errorf("gather holdings: %w", err)
+	}
+
 	var factoryID string
 	var extra json.RawMessage
 	var disclosed []ledger.DisclosedContract
@@ -254,7 +263,16 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		factoryID = fid
 		extra = registry.EmptyExtraArgs()
 	} else {
-		choiceArgs, _ := json.Marshal(map[string]any{"allocation": allocSpec})
+		// choiceArguments must be the FULL AllocationFactory_Allocate record —
+		// the DA Utility registry rejects a bare {allocation} with a
+		// decoding_error (verified live on DevNet).
+		choiceArgs, _ := json.Marshal(map[string]any{
+			"expectedAdmin":    ev.InstrumentAdmin,
+			"allocation":       allocSpec,
+			"requestedAt":      requestedAt,
+			"inputHoldingCids": holdingCids,
+			"extraArgs":        json.RawMessage(registry.EmptyExtraArgs()),
+		})
 		cc, err := rc.AllocationFactoryDiscovery(ctx, choiceArgs)
 		if err != nil {
 			return fmt.Errorf("allocation-factory discovery: %w", err)
@@ -268,15 +286,6 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 			extra = wrapExtra(cc.ChoiceContextData)
 		}
 		disclosed = cc.DisclosedContracts
-	}
-
-	// §3.4 AllocationFactory_Allocate as attendee, with input Holding cids +
-	// disclosedContracts + extraArgs. A bare exercise WILL fail — we gather the
-	// attendee's Holding cids and let the registry consolidate. If no single
-	// combination fits, UTXO consolidation would run first (documented TODO).
-	holdingCids, err := s.holdingCids(ctx, attendeeParty, ev.InstrumentAdmin, ev.InstrumentID)
-	if err != nil {
-		return fmt.Errorf("gather holdings: %w", err)
 	}
 	allocateArg, _ := json.Marshal(map[string]any{
 		"expectedAdmin":    ev.InstrumentAdmin,

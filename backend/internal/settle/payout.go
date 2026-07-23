@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/showorsow/backend/internal/ledger"
 	"github.com/showorsow/backend/internal/registry"
@@ -82,25 +83,37 @@ func (r *Runner) transferOne(ctx context.Context, rc *registry.Client, ev *store
 	// meta stamp: showorsow.dev/event = eventId "/" slotId (05 §5 / 06 E13).
 	metaVal := ev.EventID + "/" + it.SlotID
 
-	// TransferFactory_Transfer choice-argument record. The registry re-derives
-	// input holdings; we supply sender/receiver/amount/instrument + meta.
-	transferArg := map[string]any{
-		"transfer": map[string]any{
-			"sender":   opParty,
-			"receiver": it.AttendeeParty,
-			"amount":   amount,
-			"instrumentId": map[string]any{
-				"admin": ev.InstrumentAdmin,
-				"id":    ev.InstrumentID,
-			},
-			"meta": map[string]any{
-				"values": map[string]any{
-					"showorsow.dev/event": metaVal,
-				},
+	// TransferFactory_Transfer choice-argument record. The real registry does
+	// NOT re-derive input holdings — the Transfer record requires requestedAt,
+	// executeBefore and inputHoldingCids, and discovery must receive the FULL
+	// record (verified live on DevNet: bare {transfer} → decoding_error).
+	potHoldings, err := HoldingCids(ctx, r.d.Ledger, opParty, ev.InstrumentAdmin, ev.InstrumentID)
+	if err != nil {
+		return PayoutEntry{}, fmt.Errorf("gather pot holdings: %w", err)
+	}
+	transfer := map[string]any{
+		"sender":   opParty,
+		"receiver": it.AttendeeParty,
+		"amount":   amount,
+		"instrumentId": map[string]any{
+			"admin": ev.InstrumentAdmin,
+			"id":    ev.InstrumentID,
+		},
+		"requestedAt":      time.Now().UTC().Format(time.RFC3339Nano),
+		"executeBefore":    ev.SettleBefore.UTC().Format(time.RFC3339Nano),
+		"inputHoldingCids": potHoldings,
+		"meta": map[string]any{
+			"values": map[string]any{
+				"showorsow.dev/event": metaVal,
 			},
 		},
 	}
-	choiceArgs, _ := json.Marshal(transferArg)
+	transferArg := map[string]any{"transfer": transfer}
+	choiceArgs, _ := json.Marshal(map[string]any{
+		"expectedAdmin": ev.InstrumentAdmin,
+		"transfer":      transfer,
+		"extraArgs":     json.RawMessage(registry.EmptyExtraArgs()),
+	})
 
 	cc, err := rc.TransferFactory(ctx, ev.InstrumentAdmin, choiceArgs)
 	if err != nil {
