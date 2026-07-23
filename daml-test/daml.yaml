@@ -9,7 +9,7 @@ dependencies:
 data-dependencies:
   # Main package DAR — produced by `dpm build` in ../daml/. Adjust the version suffix
   # if the built filename differs (dpm names it <name>-<version>.dar).
-  - ../daml/.daml/dist/showorsow-0.1.0.dar
+  - ../daml/.daml/dist/showorsow-0.2.0.dar
   # Same six CIP-56 token-standard DARs (fetch-dars.ps1 also copies them here, or
   # symlink ../daml/lib). The mock in MockRegistry.daml implements Allocation over them.
   - ../daml/lib/splice-api-token-metadata-v1.dar
