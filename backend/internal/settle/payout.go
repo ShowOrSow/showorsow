@@ -119,6 +119,11 @@ func (r *Runner) runDemoPayouts(ctx context.Context, ev *store.EventRow, opParty
 		cid, tpl string
 		amount   *big.Rat
 	}
+	// DemoHolding createArgument shape: {issuer, owner, amount}. Read from the
+	// wildcard query's createArgument — NOT the Holding interface view, which a
+	// wildcard query does not populate (that requires an InterfaceFilter). This
+	// was the bug: the interface-view read always returned empty, so the freshly
+	// minted slashed pot looked like 0 and payouts were skipped.
 	var pot []potHolding
 	for _, ac := range acs {
 		tpl := ac.CreatedEvent.TemplateID
@@ -126,19 +131,20 @@ func (r *Runner) runDemoPayouts(ctx context.Context, ev *store.EventRow, opParty
 			issuerCid, issuerTpl = ac.CreatedEvent.ContractID, tpl
 			continue
 		}
-		raw, ok := ac.InterfaceViewValue("Splice.Api.Token.HoldingV1:Holding")
-		if !ok {
+		if !ledger.MatchesEntity(tpl, ledger.EntityDemoHolding) {
 			continue
 		}
-		var v holdingViewValue
-		if err := json.Unmarshal(raw, &v); err != nil {
+		var dh struct {
+			Owner  string `json:"owner"`
+			Amount string `json:"amount"`
+		}
+		if err := json.Unmarshal(ac.CreatedEvent.CreateArguments, &dh); err != nil {
 			continue
 		}
-		if v.Owner != opParty || v.InstrumentID.Admin != ev.InstrumentAdmin ||
-			v.InstrumentID.ID != ev.InstrumentID || IsLocked(v.Lock) {
+		if dh.Owner != opParty {
 			continue
 		}
-		amt, okAmt := new(big.Rat).SetString(v.Amount)
+		amt, okAmt := new(big.Rat).SetString(dh.Amount)
 		if !okAmt {
 			continue
 		}

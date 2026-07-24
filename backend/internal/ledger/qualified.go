@@ -36,6 +36,12 @@ const (
 // backend does not carry its package id or module name (05 §6c).
 const EntityDemoIssuer = "DemoIssuer"
 
+// EntityDemoHolding is the entity name of the demo-token holding (04 §1.7). Its
+// createArgument is {issuer, owner, amount} — read directly in the demo payout
+// path, since a wildcard ACS query populates createArgument but not the Holding
+// interface view (which requires an InterfaceFilter).
+const EntityDemoHolding = "DemoHolding"
+
 // PackageQualifier is prepended to our template suffixes to form a full
 // templateId. On upload the backend learns the package id (or uses the
 // package-name form "#showorsow:…"). Configured via SHOWOROSOW_PACKAGE_ID env.
