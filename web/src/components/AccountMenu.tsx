@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useSession } from "./SessionProvider";
 import { avatarColor, avatarInitial } from "@/lib/identity";
-import { truncatePartyId } from "@/lib/api";
+import { Check, Copy } from "lucide-react";
 
 // AccountMenu (08 §1, replaces PersonaSwitcher): avatar (name initial +
 // deterministic color from party id) + name; dropdown → email, truncated party
@@ -13,6 +13,7 @@ export function AccountMenu() {
   const { user, isAuthenticated, isLoading, logout } = useSession();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   if (!isAuthenticated || !user) {
     // Don't flash the guest buttons during the very first session probe.
@@ -91,16 +92,36 @@ export function AccountMenu() {
                 <p className="truncate text-xs text-muted-foreground">{user.email}</p>
               </div>
             </div>
+            {/* The party id is the user's real on-ledger identity — show the
+                readable hint in full (it is what faucets and organizers ask
+                for) and let the whole thing be copied in one click. */}
             <div className="px-4 py-2.5">
               <p className="text-[11px] uppercase tracking-wide text-faint">
                 Canton party
               </p>
-              <p
-                className="mono mt-0.5 text-xs text-muted-foreground"
-                title={user.partyId}
-              >
-                {truncatePartyId(user.partyId)}
+              <p className="mono mt-0.5 break-all text-xs font-medium text-text">
+                {user.partyId.split("::")[0]}
+                <span className="text-faint">::{user.partyId.split("::")[1]?.slice(0, 6)}…</span>
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(user.partyId);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1600);
+                }}
+                className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-refund hover:underline"
+              >
+                {copied ? (
+                  <>
+                    <Check className="size-3" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="size-3" /> Copy full party id
+                  </>
+                )}
+              </button>
             </div>
             <button
               role="menuitem"

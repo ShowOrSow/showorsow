@@ -65,7 +65,14 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
+    <div className="relative">
+      {/* Soft brand wash so the feed does not sit on flat white. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-[26rem] bg-gradient-to-b from-refund/[0.09] via-refund/[0.03] to-transparent"
+      />
+      <div className="dot-grid pointer-events-none absolute inset-x-0 top-0 h-[26rem] opacity-40" />
+      <div className="relative mx-auto flex max-w-6xl flex-col gap-8 px-4 py-10 sm:px-6">
       <header className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -132,6 +139,7 @@ export default function DiscoverPage() {
             onRegister={() => register(row)}
           />
         ))}
+        </div>
       </div>
     </div>
   );

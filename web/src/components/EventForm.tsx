@@ -110,8 +110,11 @@ export function EventForm() {
         </div>
       </Field>
 
+      {/* rsvpDeadline IS the doors-open moment: the contract refuses both new
+          RSVPs and refunds once it passes, so labelling it "Event starts" makes
+          the on-ledger rule visible instead of hiding it behind jargon. */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="RSVP deadline" required>
+        <Field label="Event starts" required>
           <input
             type="datetime-local"
             className={inputCls}
@@ -120,7 +123,7 @@ export function EventForm() {
             required
           />
         </Field>
-        <Field label="Event end" required>
+        <Field label="Event ends" required>
           <input
             type="datetime-local"
             className={inputCls}
@@ -131,7 +134,8 @@ export function EventForm() {
         </Field>
       </div>
       <p className="-mt-2 text-xs text-faint">
-        The backend derives the on-ledger settle deadline from event end + buffer.
+        RSVPs close the moment the event starts — after that stakes are committed
+        and can no longer be cancelled. Settlement opens after it ends.
       </p>
 
       <div className="flex items-center gap-3 pt-2">

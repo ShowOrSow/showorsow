@@ -110,15 +110,23 @@ export function EventSideCard({ ev, meta }: { ev: EventCore; meta?: EventMeta })
 /** Right column header: big title + mini-calendar date tile + location tile. */
 export function EventTitleBlock({ ev, meta }: { ev: EventCore; meta?: EventMeta }) {
   const venue = ev.venue || meta?.venue;
+  // rsvpDeadline is the doors-open moment (the contract closes RSVPs and
+  // refunds at it), so the header reads as a real start → end range.
+  const starts = new Date(ev.rsvpDeadline);
   const d = new Date(ev.eventEnd);
-  const month = d.toLocaleDateString("en-US", { month: "short" });
-  const day = d.getDate();
-  const dateLine = d.toLocaleDateString("en-US", {
+  const month = starts.toLocaleDateString("en-US", { month: "short" });
+  const day = starts.getDate();
+  const dateLine = starts.toLocaleDateString("en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const timeLine = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const hm = (x: Date) =>
+    x.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const sameDay = starts.toDateString() === d.toDateString();
+  const timeLine = sameDay
+    ? `${hm(starts)} – ${hm(d)}`
+    : `${hm(starts)} – ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} ${hm(d)}`;
 
   return (
     <div className="flex flex-col gap-5">
@@ -131,7 +139,7 @@ export function EventTitleBlock({ ev, meta }: { ev: EventCore; meta?: EventMeta 
           <MiniCalendar month={month} day={day} />
           <div>
             <p className="font-medium text-text">{dateLine}</p>
-            <p className="text-sm text-muted-foreground">ends {timeLine}</p>
+            <p className="text-sm text-muted-foreground">{timeLine}</p>
           </div>
         </div>
         {venue && (

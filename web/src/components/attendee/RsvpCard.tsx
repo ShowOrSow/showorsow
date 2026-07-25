@@ -248,7 +248,7 @@ export function RsvpCard({
             {user?.partyId && (
               <CheckinPass eventId={ev.eventId} attendeeParty={user.partyId} />
             )}
-            {beforeDeadline && (
+            {beforeDeadline ? (
               <button
                 disabled={busy || !myRsvp.rsvpCid}
                 onClick={() =>
@@ -259,6 +259,10 @@ export function RsvpCard({
               >
                 Can&apos;t make it? Cancel registration (stake returned)
               </button>
+            ) : (
+              <p className="text-center text-xs text-faint">
+                The event has started — your stake is committed until settlement.
+              </p>
             )}
           </div>
         );

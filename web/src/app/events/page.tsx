@@ -42,7 +42,14 @@ export default function EventsPage() {
   }, [data, tab]);
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <div className="relative">
+      {/* Same soft brand wash as /discover so the app pages share one backdrop. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-gradient-to-b from-refund/[0.08] via-refund/[0.025] to-transparent"
+      />
+      <div className="dot-grid pointer-events-none absolute inset-x-0 top-0 h-80 opacity-40" />
+      <div className="relative mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Events</h1>
         <div className="flex items-center gap-2">
@@ -91,6 +98,7 @@ export default function EventsPage() {
             </div>
           </section>
         ))}
+        </div>
       </div>
     </div>
   );
