@@ -25,6 +25,17 @@ func toUserView(u *users.User) userView {
 // POST /api/auth/register — {email, password, name} → session cookie + {user}.
 // Allocates the user's Canton party and inserts the users row (05 §2).
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
+	// DevNet demo mode: signup allocates a Canton party, which needs participant
+	// admin rights we don't hold on the shared node — registration is locked and
+	// judges use the pre-seeded demo accounts (DISABLE_SIGNUP).
+	if s.cfg.DisableSignup {
+		writeJSON(w, http.StatusForbidden, errBody{
+			Error:  "signups are closed",
+			Stage:  "auth",
+			Detail: "this deployment runs on the shared Canton DevNet where parties are provisioned by the node operator — use the demo accounts on the login page",
+		})
+		return
+	}
 	var req struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -154,8 +165,9 @@ func (s *Server) indexerLagMs(r *http.Request) int64 {
 // in-app faucet affordance (05 §2 / §6c). No session required by design.
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"devQuickLogin": s.cfg.DevQuickLogin,
-		"devFaucet":     s.cfg.DevFaucet,
+		"devQuickLogin":  s.cfg.DevQuickLogin,
+		"devFaucet":      s.cfg.DevFaucet,
+		"signupDisabled": s.cfg.DisableSignup,
 	})
 }
 

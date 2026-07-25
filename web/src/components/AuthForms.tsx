@@ -39,6 +39,12 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
 
   const isSignup = mode === "signup";
 
+  // Same public probe the DEV strip uses; absent/failed probe → banner hidden.
+  const { data: cfg } = useSWR<AppConfig>("/api/config", {
+    revalidateOnFocus: false,
+  });
+  const signupDisabled = cfg?.signupDisabled === true;
+
   // Already signed in → bounce to the app (e.g. back button onto /login).
   useEffect(() => {
     if (isAuthenticated) router.replace("/events");
@@ -95,6 +101,18 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
           </p>
         </div>
       </div>
+
+      {isSignup && signupDisabled && (
+        <div className="rounded-xl border border-line bg-accent/40 p-4 text-sm leading-relaxed text-muted-foreground">
+          Signups are closed on this deployment — it runs on the shared Canton
+          DevNet, where accounts are provisioned by the node operator. Use the
+          demo accounts on the{" "}
+          <Link href="/login" className="font-medium text-refund hover:underline">
+            login page
+          </Link>{" "}
+          instead.
+        </div>
+      )}
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         {isSignup && (

@@ -70,6 +70,8 @@ export interface AppConfig {
   // the deposit address but hides the "Get test tokens" buttons. Same probe as
   // devQuickLogin — read pre- and post-session.
   devFaucet?: boolean;
+  // DevNet demo mode: registration locked (parties are operator-provisioned).
+  signupDisabled?: boolean;
 }
 
 // POST /api/faucet {tokenLabel} → discriminated union (05 §6c):

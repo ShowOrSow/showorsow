@@ -76,8 +76,9 @@ func (t *TokenSource) appOperatorToken(ctx context.Context) (string, error) {
 	if auth.StaticJWT != "" {
 		return auth.StaticJWT, nil
 	}
-	// No Keycloak configured → unauthenticated sandbox.
-	if t.cfg.Keycloak.Host == "" || auth.Username == "" {
+	// No Keycloak configured → unauthenticated sandbox. Either credential shape
+	// (offline refresh token OR username/password) enables the refresh loop.
+	if t.cfg.Keycloak.Host == "" || (auth.Username == "" && auth.RefreshToken == "") {
 		return "", nil
 	}
 
@@ -89,7 +90,16 @@ func (t *TokenSource) appOperatorToken(ctx context.Context) (string, error) {
 	}
 	t.mu.Unlock()
 
-	tok, ttl, err := t.passwordGrant(ctx, auth)
+	// Offline refresh token preferred: no password in the environment, and the
+	// offline_access token never expires (DevNet demo mode).
+	var tok string
+	var ttl time.Duration
+	var err error
+	if auth.RefreshToken != "" {
+		tok, ttl, err = t.refreshGrant(ctx, auth)
+	} else {
+		tok, ttl, err = t.passwordGrant(ctx, auth)
+	}
 	if err != nil {
 		return "", err
 	}
@@ -97,6 +107,50 @@ func (t *TokenSource) appOperatorToken(ctx context.Context) (string, error) {
 	t.cached = cachedToken{token: tok, expires: time.Now().Add(ttl)}
 	t.mu.Unlock()
 	return tok, nil
+}
+
+// refreshGrant exchanges the configured OFFLINE refresh token for a fresh
+// access token (grant_type=refresh_token). Keycloak may rotate the refresh
+// token in the response; offline tokens stay valid regardless, so the
+// configured one keeps working.
+func (t *TokenSource) refreshGrant(ctx context.Context, auth config.AppOperatorAuth) (string, time.Duration, error) {
+	endpoint := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", t.cfg.Keycloak.Host, t.cfg.Keycloak.Realm)
+
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("client_id", auth.ClientID)
+	if auth.Secret != "" {
+		form.Set("client_secret", auth.Secret)
+	}
+	form.Set("refresh_token", auth.RefreshToken)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return "", 0, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := t.hc.Do(req)
+	if err != nil {
+		return "", 0, fmt.Errorf("keycloak refresh request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", 0, fmt.Errorf("keycloak refresh grant status %d", resp.StatusCode)
+	}
+	var tr tokenResp
+	if err := json.NewDecoder(resp.Body).Decode(&tr); err != nil {
+		return "", 0, fmt.Errorf("keycloak refresh decode: %w", err)
+	}
+	if tr.AccessToken == "" {
+		return "", 0, fmt.Errorf("keycloak refresh: empty access_token")
+	}
+	ttl := time.Duration(tr.ExpiresIn) * time.Second
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
+	return tr.AccessToken, ttl, nil
 }
 
 type tokenResp struct {

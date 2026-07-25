@@ -57,6 +57,11 @@ type AppOperatorAuth struct {
 	Secret   string
 	Username string
 	Password string
+	// RefreshToken, if set, is preferred over the password grant: the Keycloak
+	// OFFLINE refresh token (scope offline_access never expires) is exchanged
+	// for fresh access tokens, so no password ever lives in the environment.
+	// This is how the hosted demo authenticates against the HackCanton DevNet.
+	RefreshToken string
 }
 
 // Config is the fully-parsed backend configuration.
@@ -103,6 +108,11 @@ type Config struct {
 	// DevFaucet gates POST /api/faucet (in-app test tokens, 05 §6c). Off in
 	// anything shared.
 	DevFaucet bool
+	// DisableSignup locks self-service registration (DISABLE_SIGNUP). Used in
+	// DevNet demo mode, where the backend cannot allocate parties (no participant
+	// admin rights — parties are provisioned by the node operator), so only the
+	// pre-seeded demo accounts can sign in.
+	DisableSignup bool
 	// FaucetIssuerParty is the fallback DemoIssuer party the faucet mints as when
 	// a mintable token config carries no per-token issuerParty. Defaults to
 	// AppOperatorParty.
@@ -128,6 +138,7 @@ func Load(envPath string) (*Config, error) {
 		DevQuickLogin:      parseBool(os.Getenv("DEV_QUICK_LOGIN")),
 		SeedDemoUsers:      parseBool(os.Getenv("SEED_DEMO_USERS")),
 		DevFaucet:          parseBool(os.Getenv("DEV_FAUCET")),
+		DisableSignup:      parseBool(os.Getenv("DISABLE_SIGNUP")),
 		FaucetAmount:       getenvDefault("FAUCET_AMOUNT", "1.0"),
 		LedgerOperatorJWT:  os.Getenv("LEDGER_OPERATOR_JWT"),
 		LedgerOperatorWide: parseBool(os.Getenv("LEDGER_OPERATOR_WIDE")),
@@ -175,11 +186,12 @@ func Load(envPath string) (*Config, error) {
 	// Keycloak password grant on LocalNet/DevNet). Per-user JWTs are out of
 	// scope (05 §2) — only appOperator carries a write token.
 	c.AppOperator = AppOperatorAuth{
-		StaticJWT: os.Getenv("JWT_APPOPERATOR"),
-		ClientID:  getenvDefault("KEYCLOAK_CLIENT_ID_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_ID")),
-		Secret:    getenvDefault("KEYCLOAK_CLIENT_SECRET_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_SECRET")),
-		Username:  getenvDefault("KEYCLOAK_USERNAME_APPOPERATOR", ""),
-		Password:  getenvDefault("KEYCLOAK_PASSWORD_APPOPERATOR", ""),
+		StaticJWT:    os.Getenv("JWT_APPOPERATOR"),
+		ClientID:     getenvDefault("KEYCLOAK_CLIENT_ID_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_ID")),
+		Secret:       getenvDefault("KEYCLOAK_CLIENT_SECRET_APPOPERATOR", os.Getenv("KEYCLOAK_CLIENT_SECRET")),
+		Username:     getenvDefault("KEYCLOAK_USERNAME_APPOPERATOR", ""),
+		Password:     getenvDefault("KEYCLOAK_PASSWORD_APPOPERATOR", ""),
+		RefreshToken: getenvDefault("KEYCLOAK_REFRESH_TOKEN_APPOPERATOR", ""),
 	}
 
 	return c, nil
