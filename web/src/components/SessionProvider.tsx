@@ -56,7 +56,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (isLoading) return;
     if (isProtectedPath(pathname) && !isAuthenticated) {
-      router.replace("/login");
+      // Carry the destination so login returns here — a signed-out tap on
+      // "Host an event" used to land on /events instead of /events/new.
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, pathname, isAuthenticated, router]);
 

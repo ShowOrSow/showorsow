@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
 import type { AppConfig, DevAccount } from "@/lib/types";
@@ -31,6 +31,16 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
   const router = useRouter();
   const { pushError } = useToast();
   const { revalidateAll, isAuthenticated } = useSession();
+  const search = useSearchParams();
+
+  // /discover sends people here as ?next=/events/{id} when they tap Register
+  // signed out. Nothing read it, so the intent was dropped and everyone landed
+  // on /events. Only same-origin paths are honoured — never an absolute URL.
+  const rawNext = search.get("next");
+  const next =
+    rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//")
+      ? rawNext
+      : "/events";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -47,12 +57,12 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
 
   // Already signed in → bounce to the app (e.g. back button onto /login).
   useEffect(() => {
-    if (isAuthenticated) router.replace("/events");
-  }, [isAuthenticated, router]);
+    if (isAuthenticated) router.replace(next);
+  }, [isAuthenticated, next, router]);
 
   async function finishAuth() {
     await revalidateAll();
-    router.replace("/events");
+    router.replace(next);
   }
 
   async function submit(e: React.FormEvent) {
@@ -80,7 +90,9 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
     email.trim() && password && (!isSignup || name.trim());
 
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-6">
+    // px-4: neither /login nor /signup nor <main> supplies a gutter, and
+    // max-w-sm never clamps below 384px — the form went edge-to-edge there.
+    <div className="mx-auto flex max-w-sm flex-col gap-6 px-4">
       <div className="flex flex-col items-center gap-3 text-center">
         <Image
           src="/brand/logo-mark.png"

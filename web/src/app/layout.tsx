@@ -24,7 +24,11 @@ export default function RootLayout({
       <body className="font-sans antialiased">
         <Providers>
           <Header />
-          <main className="min-h-[calc(100vh-3.5rem)]">{children}</main>
+          {/* Header is two rows (~5.3rem) below sm, one (3.5rem) above it.
+              dvh, not vh, so the iOS URL bar does not add its height on top. */}
+          <main className="min-h-[calc(100dvh-5.5rem)] sm:min-h-[calc(100dvh-3.5rem)]">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

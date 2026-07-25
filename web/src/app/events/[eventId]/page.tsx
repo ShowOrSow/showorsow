@@ -41,8 +41,10 @@ export default function EventDetailPage({
   if (isLoading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        {/* Mirrors EventCover's mobile cap so the page does not jump ~100px
+            when the real content swaps in. */}
         <div className="grid gap-10 lg:grid-cols-[320px_1fr]">
-          <div className="aspect-square animate-pulse rounded-2xl border border-line bg-surface" />
+          <div className="mx-auto aspect-square w-full max-w-[15rem] animate-pulse rounded-2xl border border-line bg-surface lg:max-w-none" />
           <div className="h-64 animate-pulse rounded-2xl border border-line bg-surface" />
         </div>
       </div>

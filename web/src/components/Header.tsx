@@ -54,7 +54,10 @@ export function Header() {
             className="rounded-md"
             priority
           />
-          <span className="text-[17px] font-semibold tracking-tight">
+          {/* Under 360px the wordmark (~95px) is the only thing left to give:
+              the balance amounts no longer shrink, so brand + pill + account
+              would otherwise overflow. The logo mark still carries identity. */}
+          <span className="hidden text-[17px] font-semibold tracking-tight min-[360px]:inline">
             Show<span className="text-refund">or</span>Sow
           </span>
         </Link>

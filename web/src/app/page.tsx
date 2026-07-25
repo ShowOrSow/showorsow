@@ -23,8 +23,11 @@ import {
 
 export default function Home() {
   const { isAuthenticated } = useSession();
+  // Signed in, the primary CTA used to also read "Browse events" — the same
+  // label as the secondary next to it, pointing somewhere else (/events vs
+  // /discover). Signed-in users get their own events; the feed stays secondary.
   const primaryHref = isAuthenticated ? "/events" : "/signup";
-  const primaryLabel = isAuthenticated ? "Browse events" : "Get started — free";
+  const primaryLabel = isAuthenticated ? "My events" : "Get started — free";
 
   return (
     <div className="flex flex-col">

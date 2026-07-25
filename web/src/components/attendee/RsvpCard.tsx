@@ -203,7 +203,7 @@ export function RsvpCard({
                 myRsvp.inviteCid &&
                 simpleAction(() => api.decline(myRsvp.inviteCid!), "Decline")
               }
-              className="text-center text-xs text-faint transition-colors hover:text-slash disabled:opacity-50"
+              className="mx-auto rounded-lg px-3 py-2 text-center text-xs text-faint transition-colors hover:text-slash disabled:opacity-50"
             >
               Can&apos;t make it? Decline the invite
             </button>
@@ -255,7 +255,7 @@ export function RsvpCard({
                   myRsvp.rsvpCid &&
                   simpleAction(() => api.cancel(myRsvp.rsvpCid!), "Cancel")
                 }
-                className="text-center text-xs text-faint transition-colors hover:text-slash disabled:opacity-50"
+                className="mx-auto rounded-lg px-3 py-2 text-center text-xs text-faint transition-colors hover:text-slash disabled:opacity-50"
               >
                 Can&apos;t make it? Cancel registration (stake returned)
               </button>

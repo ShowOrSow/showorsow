@@ -51,7 +51,10 @@ const CARDS: Card[] = [
     venue: "SCBD",
     stake: "0.01",
     token: "cBTC",
-    className: "left-[16%] top-[46%]",
+    // Mid-height cards sit at the headline's vertical centre, so between lg and
+    // ~1220px they land under the hero paragraph and the copy paints over the
+    // photo. They wait for xl, where the container has cleared them.
+    className: "left-[16%] top-[46%] hidden xl:block",
     delay: 1.6,
     rotate: -3,
   },
@@ -73,7 +76,7 @@ const CARDS: Card[] = [
     venue: "Yogyakarta",
     stake: "0.005",
     token: "cBTC",
-    className: "right-[14%] top-[48%]",
+    className: "right-[14%] top-[48%] hidden xl:block", // mirror of the left mid card
     delay: 2.0,
     rotate: -5,
   },

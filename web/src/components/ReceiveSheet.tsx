@@ -153,21 +153,24 @@ function ReceiveSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-ink/70 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
+      {/* Capped and scrollable: with the party id wrapping to three lines and a
+          faucet row per token, this card outgrows a landscape phone and the
+          faucet buttons at the bottom became unreachable. */}
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Receive tokens"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md overflow-hidden rounded-xl border border-line bg-surface shadow-xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl border border-line bg-surface shadow-xl"
       >
         <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-4">
           <h2 className="text-base font-semibold">Receive tokens</h2>
           <button
             onClick={onClose}
-            className="shrink-0 text-muted-foreground hover:text-text"
+            className="-mr-1.5 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-text"
             aria-label="Close"
           >
             ✕

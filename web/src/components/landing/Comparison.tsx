@@ -65,10 +65,10 @@ const ROWS: {
 export function Comparison() {
   return (
     <div className="relative">
-      {/* The table needs 46rem, so on a phone it scrolls. Without a cue that
-          reads as scrollable, the ShowOrSow column — the whole point — sits
-          off-screen unnoticed. Hint + edge fade, mobile only. */}
-      <p className="mb-2 flex items-center gap-1.5 text-xs text-faint sm:hidden">
+      {/* The table needs 46rem and the container only reaches that at ~818px
+          viewport, so the cue has to survive past sm — at 768px (iPad portrait)
+          the ShowOrSow column, the whole point, is still ~43% clipped. */}
+      <p className="mb-2 flex items-center gap-1.5 text-xs text-faint min-[830px]:hidden">
         <ArrowLeftRight className="size-3.5" />
         Swipe the table to compare
       </p>
@@ -100,9 +100,11 @@ export function Comparison() {
         </tbody>
         </table>
       </div>
+      {/* from-surface, not from-ink: the card behind this is bg-surface
+          (#ffffff) and ink is #fafafa — the fade was a ~1% wash, invisible. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-ink to-transparent sm:hidden"
+        className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface to-transparent min-[830px]:hidden"
       />
     </div>
   );

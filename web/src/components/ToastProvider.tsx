@@ -121,9 +121,11 @@ function ToastViewport({
                 </button>
               )}
             </div>
+            {/* Error toasts never auto-dismiss, so this is the only way out —
+                it needs to be a real target, not a bare 15px glyph. */}
             <button
               onClick={() => dismiss(t.id)}
-              className="shrink-0 text-muted-foreground hover:text-text"
+              className="-mr-1.5 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-text"
               aria-label="Dismiss"
             >
               ✕

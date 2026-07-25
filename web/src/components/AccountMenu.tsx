@@ -55,7 +55,7 @@ export function AccountMenu() {
       <button
         onClick={() => setOpen((v) => !v)}
         disabled={busy}
-        className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm hover:border-faint disabled:opacity-60"
+        className="flex min-w-0 items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1.5 text-sm hover:border-faint disabled:opacity-60"
         aria-haspopup="menu"
         aria-expanded={open}
       >
@@ -66,8 +66,12 @@ export function AccountMenu() {
         >
           {avatarInitial(user.name, user.email)}
         </span>
-        <span className="hidden font-medium sm:inline">{user.name}</span>
-        <span className="text-muted-foreground">▾</span>
+        {/* Truncates rather than pushing the balance pill out of the row — a
+            long signup name is unbounded and the header height is not. */}
+        <span className="hidden max-w-[12ch] truncate font-medium sm:inline">
+          {user.name}
+        </span>
+        <span className="shrink-0 text-muted-foreground">▾</span>
       </button>
 
       {open && (
