@@ -7,6 +7,7 @@ import { BlurText } from "@/components/reactbits/BlurText";
 import { Aurora } from "@/components/reactbits/Aurora";
 import { NoShowSimulator } from "@/components/landing/NoShowSimulator";
 import { Comparison } from "@/components/landing/Comparison";
+import { FloatingCards } from "@/components/landing/FloatingCards";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,8 +17,6 @@ import {
   Coins,
   Ticket,
   CalendarCheck,
-  Check,
-  X,
   Lock,
   PlayCircle,
 } from "lucide-react";
@@ -30,58 +29,56 @@ export default function Home() {
   return (
     <div className="flex flex-col">
       {/* ---------------- Hero ---------------- */}
+      {/* Luma-anatomy hero: centered headline with event cards floating around
+          it. Aurora + dot grid give depth; the cards carry the stake chip that
+          makes them ours, not Luma's. */}
       <section className="relative overflow-hidden border-b border-line">
-        {/* React Bits Aurora — drifting colour fields behind the dot grid. */}
         <Aurora />
-        <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:py-28">
-          <div className="flex flex-col items-start gap-6">
-            <Badge
+        <FloatingCards />
+        <div className="relative mx-auto flex max-w-3xl flex-col items-center gap-6 px-4 py-24 text-center sm:px-6 lg:py-36">
+          <Badge
+            variant="outline"
+            className="gap-1.5 rounded-full border-line bg-surface px-3 py-1 text-muted-foreground"
+          >
+            <span className="size-1.5 rounded-full bg-refund" />
+            Built on Canton Network
+          </Badge>
+
+          {/* React Bits BlurText — words blur-settle in sequence; the emerald
+              segment keeps its color by rendering as its own delayed segment. */}
+          <h1 className="text-balance text-4xl font-semibold tracking-tight text-text sm:text-6xl lg:text-7xl">
+            <BlurText text="Events people" />{" "}
+            <BlurText text="actually show up" delay={0.12} className="text-refund" />{" "}
+            <BlurText text="to." delay={0.3} />
+          </h1>
+
+          <p className="max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
+            ShowOrSow adds a small, refundable token stake to every RSVP.
+            Attendees get it back when they show up — no-shows forfeit theirs.
+            Private by default, settled instantly on Canton.
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+            <Button asChild size="lg" className="gap-2 rounded-full px-6">
+              <Link href={primaryHref}>
+                {primaryLabel}
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+            {/* Browsing needs no account — send everyone to the public feed. */}
+            <Button
+              asChild
+              size="lg"
               variant="outline"
-              className="gap-1.5 rounded-full border-line bg-surface px-3 py-1 text-muted-foreground"
+              className="rounded-full border-line px-6"
             >
-              <span className="size-1.5 rounded-full bg-refund" />
-              Built on Canton Network
-            </Badge>
-
-            {/* React Bits BlurText — words blur-settle in sequence; the emerald
-                segment keeps its color by rendering as its own delayed segment. */}
-            <h1 className="text-balance text-4xl font-semibold tracking-tight text-text sm:text-5xl lg:text-6xl">
-              <BlurText text="Events people" />{" "}
-              <BlurText text="actually show up" delay={0.12} className="text-refund" />{" "}
-              <BlurText text="to." delay={0.3} />
-            </h1>
-
-            <p className="max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground">
-              ShowOrSow adds a small, refundable token stake to every RSVP.
-              Attendees get it back when they show up — no-shows forfeit theirs.
-              Private by default, settled instantly on Canton.
-            </p>
-
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <Button asChild size="lg" className="gap-2 rounded-full px-6">
-                <Link href={primaryHref}>
-                  {primaryLabel}
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              {/* Browsing needs no account — send everyone to the public feed. */}
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="rounded-full border-line px-6"
-              >
-                <Link href="/discover">Browse events</Link>
-              </Button>
-            </div>
-
-            <p className="text-sm text-faint">
-              No flaky RSVPs · No public guest list · No manual payouts
-            </p>
+              <Link href="/discover">Browse events</Link>
+            </Button>
           </div>
 
-          {/* Stake-outcome visual */}
-          <StakeOutcomeCard />
+          <p className="text-sm text-faint">
+            No flaky RSVPs · No public guest list · No manual payouts
+          </p>
         </div>
       </section>
 
@@ -305,52 +302,6 @@ function DemoVideo() {
       <Button asChild variant="outline" className="rounded-full border-line">
         <Link href="/discover">Open the live demo</Link>
       </Button>
-    </div>
-  );
-}
-
-function StakeOutcomeCard() {
-  return (
-    <div className="relative mx-auto w-full max-w-sm">
-      <div className="rounded-3xl border border-line bg-surface p-5 shadow-[0_12px_40px_-16px_rgba(16,24,32,0.18)]">
-        <div className="flex items-center justify-between rounded-2xl bg-ink px-4 py-3">
-          <div>
-            <p className="text-xs text-faint">You RSVP’d to</p>
-            <p className="font-medium text-text">Canton Meetup · Jakarta</p>
-          </div>
-          <Ticket className="size-5 text-refund" />
-        </div>
-
-        <div className="mt-4 flex items-center justify-between px-1">
-          <span className="text-sm text-muted-foreground">Your stake</span>
-          <span className="mono font-medium text-text">5.00 SHOW</span>
-        </div>
-
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-refund/25 bg-refund/[0.07] p-3">
-            <div className="flex items-center gap-1.5 text-refund">
-              <Check className="size-4" />
-              <span className="text-xs font-medium">Showed up</span>
-            </div>
-            <p className="mono mt-2 text-lg font-semibold text-refund">
-              +5.00
-            </p>
-            <p className="text-[11px] text-muted-foreground">refunded in full</p>
-          </div>
-          <div className="rounded-2xl border border-slash/25 bg-slash/[0.06] p-3">
-            <div className="flex items-center gap-1.5 text-slash">
-              <X className="size-4" />
-              <span className="text-xs font-medium">No-show</span>
-            </div>
-            <p className="mono mt-2 text-lg font-semibold text-slash">−5.00</p>
-            <p className="text-[11px] text-muted-foreground">stake forfeited</p>
-          </div>
-        </div>
-
-        <p className="mt-4 text-center text-[11px] text-faint">
-          Settled atomically on Canton when the event closes
-        </p>
-      </div>
     </div>
   );
 }
