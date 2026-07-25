@@ -35,7 +35,11 @@ export function SettlementResults({ pkg }: { pkg: SettlementPackage }) {
           keeps funds).
         </p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="-mx-1 overflow-x-auto px-1">
+          {/* 560px of columns — scrolls on a phone, so say so. */}
+          <p className="mb-1.5 text-xs text-faint sm:hidden">
+            Swipe for payout and delta →
+          </p>
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">

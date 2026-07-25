@@ -6,10 +6,15 @@ import { TokenLogo } from "./TokenLogo";
 import { MapPin, Ticket } from "lucide-react";
 
 // Luma-anatomy event page building blocks (verified against luma.com):
-//   left narrow column  → square cover + "Hosted by" block   (EventSideCard)
+//   left narrow column  → square cover (EventCover) + "Hosted by" / "Stake"
+//                         rail (EventSideMeta)
 //   right wide column   → big title + date/location tiles     (EventTitleBlock)
 //                       → registration card (role-specific)
 //                       → "About Event" section               (EventAbout)
+//
+// The rail is split in two because mobile stacks the columns: the cover leads,
+// but host/stake must fall BELOW the title and Registration card rather than
+// pushing them off the first screen. See the event page's `contents` wrapper.
 
 const COVERS = [
   "from-emerald-400/80 via-teal-300/70 to-sky-300/70",
@@ -38,27 +43,34 @@ export function hostLabel(party: string | undefined): string | undefined {
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-/** Left column: square cover + hosted-by block (Luma's presented-by rail). */
-export function EventSideCard({ ev, meta }: { ev: EventCore; meta?: EventMeta }) {
+/** Square cover — leads both layouts. Capped on mobile so a full-width square
+ *  does not eat the whole first screen before the title appears. */
+export function EventCover({ ev, meta }: { ev: EventCore; meta?: EventMeta }) {
+  return (
+    <div
+      className={`relative mx-auto aspect-square w-full max-w-[15rem] overflow-hidden rounded-2xl bg-gradient-to-br shadow-sm lg:max-w-none ${coverFor(ev.eventId)}`}
+    >
+      {meta?.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={meta.imageUrl} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <>
+          <Ticket className="absolute left-1/2 top-1/2 size-20 -translate-x-1/2 -translate-y-1/2 rotate-12 text-white/50" />
+          <span className="absolute bottom-4 left-0 right-0 text-center text-sm font-semibold tracking-wide text-white/80">
+            {ev.title}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Hosted-by + stake rail. Sits under the cover on desktop; drops below the
+ *  Registration card on mobile (order-last from the page's flex column). */
+export function EventSideMeta({ ev }: { ev: EventCore }) {
   const host = hostLabel(ev.organizerParty);
   return (
-    <div className="flex flex-col gap-5 lg:sticky lg:top-20">
-      <div
-        className={`relative aspect-square w-full overflow-hidden rounded-2xl bg-gradient-to-br shadow-sm ${coverFor(ev.eventId)}`}
-      >
-        {meta?.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={meta.imageUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <>
-            <Ticket className="absolute left-1/2 top-1/2 size-20 -translate-x-1/2 -translate-y-1/2 rotate-12 text-white/50" />
-            <span className="absolute bottom-4 left-0 right-0 text-center text-sm font-semibold tracking-wide text-white/80">
-              {ev.title}
-            </span>
-          </>
-        )}
-      </div>
-
+    <div className="order-last flex flex-col gap-5 lg:order-none">
       {host && (
         <div className="flex flex-col gap-2 border-t border-line pt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-faint">

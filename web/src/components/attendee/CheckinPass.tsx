@@ -40,8 +40,11 @@ export function CheckinPass({
         <QrCode className="size-3.5" />
         Your check-in pass
       </p>
+      {/* Bigger on phones: the payload (~110 chars) makes a dense QR, and this
+          gets scanned off a screen by another phone camera — larger modules
+          survive glare and focus hunting. Desktop keeps the compact size. */}
       <div
-        className="w-40 overflow-hidden rounded-lg border border-line bg-white p-1.5 shadow-sm"
+        className="w-52 max-w-full overflow-hidden rounded-lg border border-line bg-white p-2 shadow-sm sm:w-40 sm:p-1.5"
         // qrcode emits a self-contained <svg> string; nothing user-controlled inside.
         dangerouslySetInnerHTML={{ __html: svg }}
       />

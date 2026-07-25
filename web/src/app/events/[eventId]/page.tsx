@@ -7,7 +7,8 @@ import type { EventDetail, SettlementPackage } from "@/lib/types";
 import { isOrganizerDetail } from "@/lib/types";
 import { CountdownChip } from "@/components/CountdownChip";
 import {
-  EventSideCard,
+  EventCover,
+  EventSideMeta,
   EventTitleBlock,
   EventAbout,
 } from "@/components/EventHero";
@@ -88,8 +89,16 @@ export default function EventDetailPage({
         </div>
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-[320px_1fr] lg:items-start">
-        <EventSideCard ev={ev} meta={data.meta} />
+      <div className="flex flex-col gap-7 lg:grid lg:grid-cols-[320px_1fr] lg:items-start lg:gap-10">
+        {/* Desktop: a sticky left rail. Mobile: `contents` dissolves this
+            wrapper so the cover, the title column and the host/stake rail all
+            become items of the outer flex column — letting EventSideMeta's
+            order-last put the title and Registration card above it instead of
+            a screen below. */}
+        <div className="contents lg:sticky lg:top-20 lg:flex lg:flex-col lg:gap-5">
+          <EventCover ev={ev} meta={data.meta} />
+          <EventSideMeta ev={ev} />
+        </div>
 
         <div className="flex min-w-0 flex-col gap-7">
           <EventTitleBlock ev={ev} meta={data.meta} />

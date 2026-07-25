@@ -11,13 +11,40 @@ import { cn } from "@/lib/utils";
 
 // Global chrome header: brand → landing, app nav (signed-in), StaleBadge ·
 // BalancePill · AccountMenu. Guests get marketing chrome; users get app chrome.
+//
+// Mobile (< sm) splits this into two rows. Brand + balance + account alone need
+// ~356px of a 375px screen, so the nav cannot share the row — it drops to a
+// segmented strip underneath rather than hiding behind a hamburger, keeping
+// Discover one tap away (it is the entry point for self-serve RSVPs).
 export function Header() {
   const { isAuthenticated } = useSession();
   const pathname = usePathname();
 
+  const navLink = (href: string, label: string) => (
+    <Link
+      href={href}
+      className={cn(
+        "rounded-full px-3 py-1 transition-colors sm:py-1.5",
+        pathname.startsWith(href)
+          ? "bg-secondary font-medium text-text"
+          : "text-muted-foreground hover:bg-secondary hover:text-text",
+      )}
+    >
+      {label}
+    </Link>
+  );
+
+  // Discover is public (browsing needs no account); Events is personal.
+  const navLinks = (
+    <>
+      {navLink("/discover", "Discover")}
+      {isAuthenticated && navLink("/events", "My events")}
+    </>
+  );
+
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-ink/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4 sm:px-6">
+      <div className="mx-auto flex h-12 max-w-6xl items-center gap-3 px-4 sm:h-14 sm:gap-6 sm:px-6">
         <Link href="/" className="flex shrink-0 items-center gap-2">
           <Image
             src="/brand/logo-mark.png"
@@ -32,44 +59,25 @@ export function Header() {
           </span>
         </Link>
 
-        {/* Discover is public (browsing needs no account); Events is personal. */}
-        <nav className="flex items-center gap-1 text-sm">
-          <Link
-            href="/discover"
-            className={cn(
-              "rounded-full px-3 py-1.5 transition-colors",
-              pathname.startsWith("/discover")
-                ? "bg-secondary font-medium text-text"
-                : "text-muted-foreground hover:bg-secondary hover:text-text",
-            )}
-          >
-            Discover
-          </Link>
-          {isAuthenticated && (
-            <Link
-              href="/events"
-              className={cn(
-                "rounded-full px-3 py-1.5 transition-colors",
-                pathname.startsWith("/events")
-                  ? "bg-secondary font-medium text-text"
-                  : "text-muted-foreground hover:bg-secondary hover:text-text",
-              )}
-            >
-              My events
-            </Link>
-          )}
-        </nav>
+        <nav className="hidden items-center gap-1 text-sm sm:flex">{navLinks}</nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex min-w-0 items-center gap-2">
           {isAuthenticated && (
             <>
-              <StaleBadge />
+              {/* Diagnostic chip — not worth a mobile row of its own. */}
+              <span className="hidden sm:block">
+                <StaleBadge />
+              </span>
               <BalancePill />
             </>
           )}
           <AccountMenu />
         </div>
       </div>
+
+      <nav className="mx-auto flex max-w-6xl items-center gap-1 border-t border-line px-3 py-1 text-[13px] sm:hidden">
+        {navLinks}
+      </nav>
     </header>
   );
 }

@@ -1,4 +1,4 @@
-import { Check, X, Minus } from "lucide-react";
+import { Check, X, Minus, ArrowLeftRight } from "lucide-react";
 
 // Comparison — ShowOrSow vs the two things organizers actually use today:
 // a free RSVP tool (Luma/Eventbrite-style) and paid ticketing. Framed by what
@@ -64,8 +64,16 @@ const ROWS: {
 
 export function Comparison() {
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[46rem] border-separate border-spacing-0 text-sm">
+    <div className="relative">
+      {/* The table needs 46rem, so on a phone it scrolls. Without a cue that
+          reads as scrollable, the ShowOrSow column — the whole point — sits
+          off-screen unnoticed. Hint + edge fade, mobile only. */}
+      <p className="mb-2 flex items-center gap-1.5 text-xs text-faint sm:hidden">
+        <ArrowLeftRight className="size-3.5" />
+        Swipe the table to compare
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[46rem] border-separate border-spacing-0 text-sm">
         <thead>
           <tr>
             <th className="w-[38%] px-4 pb-3 text-left font-medium text-muted-foreground">
@@ -90,7 +98,12 @@ export function Comparison() {
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-ink to-transparent sm:hidden"
+      />
     </div>
   );
 }

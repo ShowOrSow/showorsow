@@ -49,8 +49,11 @@ export function BalancePill() {
   // Data still loading / transient fetch error → neutral placeholder, NOT an
   // empty wallet (a mid-demo backend hiccup must not read as "no holdings").
   // Clicking the pill opens the Receive sheet (deposit address + faucet) — 08 §1.
+  // Mobile drops the token *label* (the logo already names it) and tightens the
+  // gaps — two tokens with labels cost ~205px, which does not fit beside the
+  // brand and account button on a 375px screen.
   const pillBase =
-    "rounded-lg border border-line bg-surface px-3 py-1.5 text-sm hover:border-faint";
+    "shrink rounded-lg border border-line bg-surface px-2 py-1.5 text-sm hover:border-faint sm:px-3";
 
   if (!data) {
     return (
@@ -74,13 +77,17 @@ export function BalancePill() {
       type="button"
       onClick={openReceive}
       title="Receive tokens"
-      className={`flex items-center gap-3 ${pillBase} ${flash}`}
+      className={`flex min-w-0 items-center gap-2 ${pillBase} sm:gap-3 ${flash}`}
     >
       {data.map((b) => (
-        <span key={b.instrumentId} className="flex items-center gap-1.5">
+        <span key={b.instrumentId} className="flex min-w-0 items-center gap-1 sm:gap-1.5">
           <TokenLogo label={instrumentShort(b.instrumentId)} size={16} />
-          <span className="mono font-semibold text-gold">{formatAmount(b.amount)}</span>
-          <span className="text-muted-foreground">{instrumentShort(b.instrumentId)}</span>
+          <span className="mono truncate font-semibold text-gold">
+            {formatAmount(b.amount)}
+          </span>
+          <span className="hidden text-muted-foreground sm:inline">
+            {instrumentShort(b.instrumentId)}
+          </span>
         </span>
       ))}
     </button>
