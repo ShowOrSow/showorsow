@@ -2,7 +2,7 @@
 
 import { motion } from "motion/react";
 import { TokenLogo } from "../TokenLogo";
-import { MonumentArt, type MonumentVariant } from "./MonumentArt";
+import Image from "next/image";
 import { MapPin } from "lucide-react";
 
 // FloatingCards — the Luma-landing anatomy: mini event cards scattered around
@@ -14,8 +14,8 @@ type Card = {
   venue: string;
   stake: string;
   token: string;
-  art: MonumentVariant;
-  gradient: string;
+  photo: string;
+  alt: string;
   className: string; // absolute position
   delay: number;
   rotate: number;
@@ -24,66 +24,66 @@ type Card = {
 const CARDS: Card[] = [
   {
     title: "Canton Builders Night",
-    art: "monas",
+    photo: "/brand/events/monas.jpg",
+    alt: "Monas, Jakarta",
     venue: "Jakarta",
     stake: "0.005",
     token: "cBTC",
-    gradient: "from-emerald-400/90 via-teal-300/80 to-sky-300/80",
     className: "left-[3%] top-[12%]",
     delay: 0,
     rotate: -6,
   },
   {
     title: "Web3 Dev Workshop",
-    art: "skyline",
+    photo: "/brand/events/bandung.jpg",
+    alt: "Bandung at night",
     venue: "Bandung",
     stake: "0.1",
     token: "cETH",
-    gradient: "from-sky-400/90 via-indigo-300/80 to-violet-300/80",
     className: "left-[7%] bottom-[10%]",
     delay: 0.8,
     rotate: 5,
   },
   {
     title: "Founder Dinner",
-    art: "gate",
+    photo: "/brand/events/jakarta.jpg",
+    alt: "Sudirman, Jakarta",
     venue: "SCBD",
     stake: "0.01",
     token: "cBTC",
-    gradient: "from-amber-300/90 via-orange-300/80 to-rose-300/80",
     className: "left-[16%] top-[46%]",
     delay: 1.6,
     rotate: -3,
   },
   {
     title: "Hackathon Demo Day",
-    art: "borobudur",
+    photo: "/brand/events/borobudur.jpg",
+    alt: "Borobudur",
     venue: "Online",
     stake: "0.05",
     token: "cETH",
-    gradient: "from-violet-400/90 via-fuchsia-300/80 to-pink-300/80",
     className: "right-[4%] top-[10%]",
     delay: 0.4,
     rotate: 6,
   },
   {
     title: "Community Meetup",
-    art: "mountain",
+    photo: "/brand/events/bromo.jpg",
+    alt: "Mount Bromo",
     venue: "Yogyakarta",
     stake: "0.005",
     token: "cBTC",
-    gradient: "from-teal-400/90 via-emerald-300/80 to-lime-300/80",
     className: "right-[14%] top-[48%]",
     delay: 2.0,
     rotate: -5,
   },
   {
     title: "Run Club Sunday",
-    art: "stadium",
+    photo: "/brand/events/gbk.jpg",
+    alt: "Gelora Bung Karno",
     venue: "GBK",
     stake: "0.002",
     token: "cBTC",
-    gradient: "from-rose-300/90 via-pink-300/80 to-fuchsia-300/80",
     className: "right-[6%] bottom-[9%]",
     delay: 1.2,
     rotate: 4,
@@ -112,8 +112,15 @@ export function FloatingCards() {
           }}
         >
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_16px_40px_-20px_rgba(16,24,32,0.35)]">
-            <div className={`h-[4.5rem] overflow-hidden bg-gradient-to-br ${c.gradient}`}>
-              <MonumentArt variant={c.art} />
+            <div className="relative h-[4.5rem] overflow-hidden bg-ink">
+              <Image
+                src={c.photo}
+                alt={c.alt}
+                fill
+                sizes="160px"
+                className="object-cover"
+                priority={false}
+              />
             </div>
             <div className="flex flex-col gap-1 p-2.5">
               <p className="truncate text-xs font-semibold text-text">{c.title}</p>
