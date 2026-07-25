@@ -23,11 +23,9 @@ import {
 } from "lucide-react";
 
 export default function Home() {
-  const { isAuthenticated, isLoading } = useSession();
+  const { isAuthenticated } = useSession();
   const primaryHref = isAuthenticated ? "/events" : "/signup";
   const primaryLabel = isAuthenticated ? "Browse events" : "Get started — free";
-  const secondaryHref = isAuthenticated ? "/events/new" : "/login";
-  const secondaryLabel = isAuthenticated ? "Create an event" : "Sign in";
 
   return (
     <div className="flex flex-col">
@@ -240,33 +238,6 @@ export default function Home() {
           </div>
           <div className="mt-10">
             <DemoVideo />
-          </div>
-        </div>
-      </section>
-
-      {/* ---------------- Demo CTA ---------------- */}
-      <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
-        <div className="relative overflow-hidden rounded-3xl border border-refund/20 bg-refund/[0.06] px-6 py-14 text-center sm:px-12">
-          <div className="dot-grid pointer-events-none absolute inset-0 opacity-40" />
-          <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-5">
-            <h2 className="text-3xl font-semibold tracking-tight text-text">
-              Try the live demo
-            </h2>
-            <p className="text-muted-foreground">
-              One-click login as a demo guest, grab test tokens from the faucet,
-              and RSVP to an event — real stakes, live on Canton.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg" className="gap-2 rounded-full px-6">
-                <Link href={isLoading ? "/login" : primaryHref}>
-                  {isAuthenticated ? "Go to events" : "Launch the demo"}
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-            </div>
-            <p className="mono text-xs text-faint">
-              demo login · alice@showorsow.dev · password demo1234
-            </p>
           </div>
         </div>
       </section>
