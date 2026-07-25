@@ -117,7 +117,7 @@ sequenceDiagram
 
 | Party | Sees |
 |---|---|
-| Attendee | Their own invite, their own RSVP, their own payout. **Nothing about other attendees — no names, no count, no TVL.** |
+| Attendee | Their own invite, their own RSVP, their own payout. **Never another attendee's identity, stake or payout.** The only cross-attendee figure anywhere is the public "N going" count on /discover — an app-level aggregate, so the pot size follows from it, but never who is in it. On the ledger itself they see nothing. |
 | Organizer | Headcount, TVL, check-in list (identities needed for the door) |
 | appOperator (app party) | Everything it co-signed — which is the app's own workflow, not attendees' other holdings |
 | Everyone else on Canton | Nothing. The contracts don't exist on their nodes. |
@@ -139,7 +139,7 @@ daml/         Smart contracts — module ShowOrSow (Event, RSVPInvite, StakedRSV
               implementing the CIP-56 AllocationRequest interface)
 daml-test/    Test-only package — MockRegistry + DemoScript test suite
               (happy path, privacy assertions, deadlines, validation edges)
-backend/      Go — REST API (13 endpoints), stake/settlement/payout runners,
+backend/      Go — REST API (22 endpoints), stake/settlement/payout runners,
               withdrawal watcher, JSON Ledger API v2 + registry OpenAPI clients
 indexer/      TypeScript — ledger update stream → Postgres projections (E1–E16),
               exactly-once (offset + batch in one transaction), poll fallback
@@ -179,7 +179,7 @@ One event, 0.01 cBTC stake, three attendees. Alice and Bob check in; Charlie gho
 
 Honesty section — judges deserve the truth:
 
-- **Real:** every ledger action — contract creation, allocation locking, check-in, settlement, redistribution — executes on a Canton ledger via the JSON Ledger API v2 against real CIP-56 interfaces. The hosted demo runs on the shared **hackcanton-01 DevNet** against the live **cBTC** (BitSafe) and **cETH** (onRails) registries, so staking there moves real registry holdings. Two complete cBTC cycles and one cETH cycle — including a slash and its pot redistribution — are on [/proof](https://showorsow.vercel.app/proof) with the update id for every step. Creating an event, staking and checking in each report their transaction id in the UI as it happens.
+- **Real:** every ledger action — contract creation, allocation locking, check-in, settlement, redistribution — executes on a Canton ledger via the JSON Ledger API v2 against real CIP-56 interfaces. The hosted demo runs on the shared **hackcanton-01 DevNet** against the live **cBTC** (BitSafe) and **cETH** (onRails) registries, so staking there moves real registry holdings. Two complete cBTC cycles and one cETH cycle — including a slash and its pot redistribution — are on [/proof](https://showorsow.vercel.app/proof) with the update id for every step. Creating an event, staking and scanning a check-in pass each report their transaction id in the UI as it happens.
 - **Simulated:** the venue (this is software — someone still has to stand at a door); the frontend plays the *wallet role* for allocations, because wallet-side `AllocationRequest` rendering is still immature ecosystem-wide.
 - **Known limitations:** attendees can `Allocation_Withdraw` pre-settlement (by standard design — we detect it and void the RSVP); transaction ids are surfaced at the moment of the action rather than persisted per row, so reopening an event later does not replay them; signup is closed on the hosted demo because allocating a party needs participant admin rights we do not hold on a shared node — judges use the seeded accounts.
 

@@ -13,3 +13,7 @@ target/
 .wslbuild.log
 .wslbuild.run
 .wsl-build.sh
+
+# Personal Obsidian vault — not part of the project.
+.obsidian/
+*.base

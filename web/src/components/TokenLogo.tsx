@@ -71,21 +71,3 @@ export function TokenLogo({
     </span>
   );
 }
-
-/** Logo + label, the standard way to name a token inline. */
-export function TokenBadge({
-  label,
-  size = 18,
-  className,
-}: {
-  label: string | undefined;
-  size?: number;
-  className?: string;
-}) {
-  return (
-    <span className={cn("inline-flex items-center gap-1.5", className)}>
-      <TokenLogo label={label} size={size} />
-      <span className="font-medium">{label}</span>
-    </span>
-  );
-}

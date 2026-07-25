@@ -74,7 +74,9 @@ export function loadConfig(): Config {
     ledgerJwt: opt('LEDGER_JWT', ''),
     streamMode: mode,
     pollIntervalMs: Number(opt('POLL_INTERVAL_MS', '2000')),
-    healthzPort: Number(opt('HEALTHZ_PORT', '8081')),
+    // 8091 by default: the backend's INDEXER_HEALTH_URL, deploy.sh and the README
+    // all name that port, and a mismatch shows up only as a stuck StaleBadge.
+    healthzPort: Number(opt('HEALTHZ_PORT', '8091')),
     metaEventKey: opt('META_EVENT_KEY', 'showorsow.dev/event'),
     templates: {
       event: parseQualified(opt('TPL_EVENT', 'ShowOrSow:Event')),

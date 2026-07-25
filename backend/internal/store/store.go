@@ -136,42 +136,6 @@ func (s *Store) GetEvent(ctx context.Context, eventID string) (*EventRow, error)
 	return &e, nil
 }
 
-// ListEventsForOrganizer returns events owned by an organizer party, ordered by
-// event_end (07 §3).
-func (s *Store) ListEventsForOrganizer(ctx context.Context, organizerParty string) ([]EventRow, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT e.event_id, e.contract_id, e.organizer_party, e.title,
-		       e.stake_amount::text, e.instrument_admin, e.instrument_id,
-		       e.rsvp_deadline, e.event_end, e.settle_before, e.status::text,
-		       COALESCE(m.description,''), COALESCE(m.venue,''), COALESCE(m.image_url,'')
-		FROM events e
-		LEFT JOIN event_meta m ON m.event_id = e.event_id
-		WHERE e.organizer_party = $1
-		ORDER BY e.event_end`, organizerParty)
-	if err != nil {
-		return nil, err
-	}
-	return scanEventRows(rows)
-}
-
-// ListEventsForAttendee returns only events where the attendee holds an rsvps
-// row (07 §3), ordered by event_end.
-func (s *Store) ListEventsForAttendee(ctx context.Context, attendeeParty string) ([]EventRow, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT e.event_id, e.contract_id, e.organizer_party, e.title,
-		       e.stake_amount::text, e.instrument_admin, e.instrument_id,
-		       e.rsvp_deadline, e.event_end, e.settle_before, e.status::text,
-		       COALESCE(m.description,''), COALESCE(m.venue,''), COALESCE(m.image_url,'')
-		FROM events e
-		JOIN rsvps r ON r.event_id = e.event_id AND r.attendee_party = $1
-		LEFT JOIN event_meta m ON m.event_id = e.event_id
-		ORDER BY e.event_end`, attendeeParty)
-	if err != nil {
-		return nil, err
-	}
-	return scanEventRows(rows)
-}
-
 // ListEventsForUser returns every event a user can see: events they organize
 // (organizer_party = their party) UNION events where they hold an rsvps row
 // (07 §3). Under real accounts a single user is both an organizer of their own

@@ -25,18 +25,6 @@ export function timeLeft(deadlineIso: string, now: number): {
   return { ms, label, expired: false };
 }
 
-export function formatDateTime(iso: string | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function toIsoFromLocalInput(v: string): string {
   // datetime-local yields "YYYY-MM-DDTHH:mm" in local time; convert to ISO.
   if (!v) return "";

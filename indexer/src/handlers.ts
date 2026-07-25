@@ -249,7 +249,7 @@ function handleCreate(
     if (leg === undefined) return;
     if (leg.sender !== cfg.potParty) return; // only pot-out legs are payouts (E13 gate)
 
-    const eventId = metaLookup(leg.meta, cfg.metaEventKey);
+    const eventId = eventIdFromMeta(metaLookup(leg.meta, cfg.metaEventKey));
     if (eventId === undefined) {
       // meta stripped by the registry → unattributed log + alert (E13 fallback).
       out.push({
@@ -476,6 +476,23 @@ function readTransferLeg(view: Record<string, unknown>): TransferLeg | undefined
   // meta may live on the transfer or on the view.
   const meta = getField(transfer, 'meta') ?? getField(view, 'meta');
   return { sender, receiver, amount, meta };
+}
+
+/**
+ * Extract payouts.event_id from the payout runner's meta stamp. The stamp is
+ * `eventId "/" slotId` (05 §5) — the slot id identifies WHICH invite slot was paid, which the
+ * payouts row already carries as attendee_party (the transfer receiver), so only the leading
+ * event id belongs in the column. Inserting the composite verbatim violates the
+ * payouts.event_id FK to events, which rolls the whole update back and wedges the feed on that
+ * offset forever. Split on the FIRST '/': the event id is a UUID, the slot id is the attendee's
+ * email and is free to contain anything. A stamp with no '/' (demo/legacy) passes through
+ * unchanged; an empty event id falls through to payouts_unattributed rather than failing the FK.
+ */
+function eventIdFromMeta(stamp: string | undefined): string | undefined {
+  if (stamp === undefined) return undefined;
+  const slash = stamp.indexOf('/');
+  const eventId = slash === -1 ? stamp : stamp.slice(0, slash);
+  return eventId === '' ? undefined : eventId;
 }
 
 interface HoldingFields {

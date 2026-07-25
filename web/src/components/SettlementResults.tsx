@@ -12,8 +12,10 @@ import { DeltaBadge } from "./DeltaBadge";
 // → outcome chip, payout amount + status, and balance delta = after − before
 // from balance_snapshots. Ghost row highlighted. Footer per row: tx update_id.
 export function SettlementResults({ pkg }: { pkg: SettlementPackage }) {
-  // The settlements array is the canonical row set; payouts are matched in.
-  const rows = pkg.settlements.length ? pkg.settlements : pkg.payouts;
+  // settlements is the canonical row set — every payout is already joined into
+  // its row as payoutAmount/payoutStatus, and pkg.payouts carries only
+  // {party, amount}, which cannot render a row.
+  const rows = pkg.settlements;
   const deltaByParty = indexDeltas(pkg.deltas);
 
   const refunds = rows.filter((r) => r.outcome === "refunded").length;

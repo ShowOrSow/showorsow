@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -262,8 +263,14 @@ func (s *Server) labelForParty(ctx context.Context, party string) string {
 	return s.users.DisplayNameForParty(ctx, party)
 }
 
+// maxBodyBytes caps every decoded request body. Nothing we accept is anywhere
+// near this (the longest field is an event description), and without a cap an
+// unauthenticated POST to /api/auth/login can stream an unbounded body straight
+// into the decoder's allocations.
+const maxBodyBytes = 1 << 20
+
 func decodeBody(r *http.Request, v any) error {
-	dec := json.NewDecoder(r.Body)
+	dec := json.NewDecoder(io.LimitReader(r.Body, maxBodyBytes))
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
 }
@@ -295,10 +302,13 @@ func withCORS(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
+		// Vary unconditionally: the response differs by Origin whether or not
+		// this one matched, so an intermediary cache that saw a non-matching
+		// origin must not replay that copy to the allowed one.
+		w.Header().Set("Vary", "Origin")
 		if origin == allowed {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Set("Vary", "Origin")
 		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")

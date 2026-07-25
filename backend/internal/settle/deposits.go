@@ -21,9 +21,9 @@ type DepositAcceptor struct {
 	d    Deps
 	tick time.Duration
 	// seen suppresses re-attempts on instruction cids we already accepted (or
-	// tried) within the process lifetime — a belt-and-braces guard on top of the
-	// natural idempotency (an accepted instruction is archived and drops out of
-	// the next ACS query).
+	// that no configured registry can accept) within the process lifetime — a
+	// belt-and-braces guard on top of the natural idempotency (an accepted
+	// instruction is archived and drops out of the next ACS query).
 	seen map[string]bool
 }
 
@@ -111,23 +111,25 @@ func (a *DepositAcceptor) sweepParty(ctx context.Context, party string) {
 		if a.seen[cid] {
 			continue
 		}
-		a.seen[cid] = true
 
 		rc, err := a.d.Registry(v.Transfer.InstrumentID.Admin, v.Transfer.InstrumentID.ID)
 		if err != nil {
 			// No configured registry for this instrument (e.g. an unknown token) —
-			// nothing we can accept. Log and skip.
+			// nothing we can accept, and no tick will change that. Mark it so the
+			// log says so once rather than every 15s.
+			a.seen[cid] = true
 			a.logErr("deposit-registry", err)
 			continue
 		}
 		if err := AcceptTransferInstruction(ctx, a.d.Ledger, rc, party, cid, a.cmdID("deposit-accept")); err != nil {
-			// A concurrent accept (or a stale cid) can fail here; log and move on.
-			// The cid is marked seen, but a genuinely-still-pending offer will
-			// reappear on the next full ACS snapshot only if it is re-created —
-			// acceptable for demo scale.
+			// Transient (registry hiccup, concurrent accept, expired context): leave
+			// the cid unmarked so the next tick retries. Marking it here stranded the
+			// money — a still-pending offer is never re-created, so one failed accept
+			// meant the deposit never landed for the rest of the process lifetime.
 			a.logErr("deposit-accept", err)
 			continue
 		}
+		a.seen[cid] = true
 		log.Printf("deposit accepted: party=%s instrument=%s/%s instruction=%s",
 			party, v.Transfer.InstrumentID.Admin, v.Transfer.InstrumentID.ID, ledger.ShortCid(cid))
 	}

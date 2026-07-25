@@ -71,7 +71,9 @@ const CETH_STEPS: Step[] = [
   {
     what: "Redistribute between parties",
     detail: "TransferFactory_Transfer — 1.0 cETH moved, then accepted",
-    updateId: "12200115161dfa4a91a8f502…",
+    // The only id we did not capture in full during the runs — labelled rather
+    // than padded, so nobody wastes a lookup on a string that cannot resolve.
+    updateId: "12200115161dfa4a91a8f502… (prefix only — full id not captured)",
     icon: <Send className="size-4" />,
   },
   {
@@ -111,8 +113,9 @@ export default function ProofPage() {
           <strong className="text-text">real cBTC and real cETH</strong> issued
           by BitSafe and onRails — the demo accounts are parties the node
           operator provisioned, which is why signup is closed. The runs below are
-          complete event cycles on that node; each line is a transaction id you
-          can look up there.
+          complete event cycles on that node; each line carries that
+          transaction&apos;s update id, and every one printed in full can be
+          looked up there.
         </p>
         <p className="rounded-xl border border-line bg-accent/40 p-4 text-sm leading-relaxed text-muted-foreground">
           The point worth noticing: the two runs are the{" "}

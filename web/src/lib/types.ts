@@ -24,16 +24,6 @@ export type RsvpStatus =
   | "cancelled"
   | "settled";
 
-export const RSVP_STATUSES: RsvpStatus[] = [
-  "invited",
-  "accepted",
-  "declined",
-  "staked",
-  "withdrawn",
-  "cancelled",
-  "settled",
-];
-
 export type EventStatus = "open" | "ended" | "settled";
 
 // GET /api/session → {user, indexerLagMs}. 401s when unauthenticated (the route
@@ -124,7 +114,8 @@ export interface EventCore {
   venue?: string;
   /** Organizer's Canton party (backend sends it; hint prefix = display name). */
   organizerParty?: string;
-  tokenLabel: string;
+  /** Request-side only — no response carries it. Read it via tokenLabelOf(). */
+  tokenLabel?: string;
   instrumentId?: string;
   decimals?: number;
   stakeAmount: string;
@@ -207,7 +198,10 @@ export interface OrganizerEventDetail {
 export interface AttendeeEventDetail {
   event: EventCore;
   meta?: EventMeta;
-  myRsvp: MyRsvp;
+  // Nullable on purpose: a signed-in user who never joined this event gets
+  // {"myRsvp": null} rather than a 404, so consumers MUST handle the absent
+  // row (RsvpCard renders the "not registered" state) instead of assuming one.
+  myRsvp?: MyRsvp | null;
   stats?: undefined;
   rsvps?: undefined;
 }
@@ -260,9 +254,18 @@ export interface BalanceDelta {
   after: string;
 }
 
+// One pot → recipient transfer. NOT a SettlementRow: both producers send
+// {party, amount} (close adds transferCid) with no outcome/checkedIn/label, so
+// the row set has to come from settlements[], which carries the payout columns.
+export interface PayoutEntry {
+  party: string;
+  amount: string;
+  transferCid?: string; // POST .../close only; the read model's GET omits it
+}
+
 export interface SettlementPackage {
   settlements: SettlementRow[];
-  payouts: SettlementRow[]; // may overlap; UI reads settlements as the row set
+  payouts: PayoutEntry[];
   deltas: BalanceDelta[];
 }
 

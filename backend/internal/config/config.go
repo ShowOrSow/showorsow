@@ -217,13 +217,6 @@ func (c *Config) TokenByAdminInstrument(admin, instrumentID string) (TokenConfig
 	return TokenConfig{}, false
 }
 
-// IsDemoTokenLabel reports whether the token with this label runs in
-// demo-token mode (mintable pure-Daml token, 05 §6c). Unknown label → false.
-func (c *Config) IsDemoTokenLabel(label string) bool {
-	t, ok := c.TokenByLabel(label)
-	return ok && t.Mintable
-}
-
 // IsDemoToken reports whether the (admin, instrumentId) token runs in
 // demo-token mode. Unknown token → false.
 func (c *Config) IsDemoToken(admin, instrumentID string) bool {

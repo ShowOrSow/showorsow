@@ -145,9 +145,19 @@ export function startWsFeed(cfg: Config, cb: FeedCallbacks): FeedHandle {
 
   connect();
 
+  // An open subscription with nothing wedged behind it IS caught up, so tick the
+  // freshness heartbeat the poll feeder gets for free from its no-op poll —
+  // otherwise lagMs only ever advances on a real update and the frontend's
+  // "data syncing…" badge sticks after ~10s of a quiet ledger.
+  const liveness = setInterval(() => {
+    if (!stopped && !halted && ws?.readyState === WebSocket.OPEN) cb.onSynced?.();
+  }, cfg.pollIntervalMs);
+  liveness.unref?.();
+
   return {
     stop(): void {
       stopped = true;
+      clearInterval(liveness);
       ws?.close();
     },
   };

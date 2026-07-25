@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/showorsow/backend/internal/config"
 	"github.com/showorsow/backend/internal/ledger"
@@ -119,7 +120,13 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 		return nil, fmt.Errorf("preflight: %w", err)
 	}
 
-	res := &SettlementResult{}
+	// Empty, not nil: the web pins all three as non-nullable arrays and indexes
+	// straight into them, so an event nobody staked must still marshal as [].
+	res := &SettlementResult{
+		Settlements: []SettlementEntry{},
+		Payouts:     []PayoutEntry{},
+		Deltas:      []DeltaEntry{},
+	}
 
 	// Parties whose balances we snapshot: every settling attendee (with their
 	// own JWT, 05 §6).
@@ -133,7 +140,15 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 	// 3. EndEventEarly as organizer → new Event cid from the tx result.
 	newEventCid, err := r.endEventEarly(ctx, ev, orgParty)
 	if err != nil {
-		return nil, fmt.Errorf("EndEventEarly: %w", err)
+		// A close that died anywhere after this step (CloseEvent, a payout, even a
+		// dropped HTTP connection) leaves the Event already ended, and the choice
+		// asserts otherwise — so every later attempt failed here and the event could
+		// never be settled at all, leaving every stake locked until settleBefore
+		// expired. Resume from the ended Event the read model already carries.
+		if !isAlreadyEnded(err) {
+			return nil, fmt.Errorf("EndEventEarly: %w", err)
+		}
+		newEventCid = ev.ContractID
 	}
 
 	// 4. Per remaining RSVP: fetch ChoiceContext — execute-transfer (ghosts) /
@@ -180,7 +195,10 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 		// still run so RSVPs are not stranded.
 		r.logErr("payout", err)
 	}
-	res.Payouts = payouts
+	// append, not assign — runPayouts returns a nil slice on every skip path
+	// (no check-ins, nothing slashed, dust-only share) and a plain assignment
+	// would put that nil back on the wire.
+	res.Payouts = append(res.Payouts, payouts...)
 
 	// Join payout results into the settlement entries — the web renders the
 	// payout column from the row itself, not from the separate payouts array.
@@ -189,7 +207,11 @@ func (r *Runner) Close(ctx context.Context, ev *store.EventRow) (*SettlementResu
 		payoutByParty[p.RecipientParty] = p.Amount
 	}
 	for i, it := range items {
-		if amt, ok := payoutByParty[it.AttendeeParty]; ok {
+		// PayoutEntry.RecipientParty is the DISPLAY NAME (as the web pins it), so
+		// the join key must be the label too — looking up the raw party id never
+		// matched and the close response always came back with an empty payout
+		// column.
+		if amt, ok := payoutByParty[r.labelFor(ctx, it.AttendeeParty)]; ok {
 			res.Settlements[i].PayoutAmount = amt
 			res.Settlements[i].PayoutStatus = "accepted" // §5.3 auto-accept path
 		}
@@ -245,6 +267,15 @@ func (r *Runner) endEventEarly(ctx context.Context, ev *store.EventRow, organize
 		return "", fmt.Errorf("EndEventEarly produced no recreated Event")
 	}
 	return cid, nil
+}
+
+// isAlreadyEnded detects ONLY the EndEventEarly 'ended' assert, so a settlement
+// that failed after the event was ended can be re-run. Every other failure must
+// still abort: ending the event is what unlocks CloseEvent, and skipping a real
+// failure there would settle against a contract we never confirmed.
+func isAlreadyEnded(err error) bool {
+	// The Daml assert message is "Event has already ended" (ShowOrSow.daml).
+	return strings.Contains(strings.ToLower(err.Error()), "already ended")
 }
 
 // markSettled archives the Event (strictly last, 05 §4.6).

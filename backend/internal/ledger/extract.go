@@ -1,7 +1,5 @@
 package ledger
 
-import "strings"
-
 // Helpers to pull contract ids out of a submit-and-wait transaction result.
 
 // CreatedByTemplate returns the contract id of the first created contract whose
@@ -13,17 +11,6 @@ func (r *SubmitAndWaitResponse) CreatedByTemplate(suffix string) (string, bool) 
 		}
 	}
 	return "", false
-}
-
-// AllCreatedByTemplate returns all created contract ids matching a suffix.
-func (r *SubmitAndWaitResponse) AllCreatedByTemplate(suffix string) []string {
-	var out []string
-	for _, e := range r.Transaction.Events {
-		if e.Created != nil && MatchesTemplate(e.Created.TemplateID, suffix) {
-			out = append(out, e.Created.ContractID)
-		}
-	}
-	return out
 }
 
 // CreatedByInterface returns the contract id of the first created contract that
@@ -40,17 +27,6 @@ func (r *SubmitAndWaitResponse) CreatedByInterface(ifaceSuffix string) (string, 
 		}
 	}
 	return "", false
-}
-
-// ArchivedByTemplate returns archived contract ids matching a suffix.
-func (r *SubmitAndWaitResponse) ArchivedByTemplate(suffix string) []string {
-	var out []string
-	for _, e := range r.Transaction.Events {
-		if e.Archived != nil && MatchesTemplate(e.Archived.TemplateID, suffix) {
-			out = append(out, e.Archived.ContractID)
-		}
-	}
-	return out
 }
 
 // InterfaceViewValue returns the raw interface view JSON of an active contract
@@ -70,13 +46,4 @@ func ShortCid(cid string) string {
 		return cid
 	}
 	return cid[:8] + "…" + cid[len(cid)-4:]
-}
-
-// NormalizeTemplateSuffix strips any package prefix from a full templateId.
-func NormalizeTemplateSuffix(templateID string) string {
-	parts := strings.SplitN(templateID, ":", 2)
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return templateID
 }

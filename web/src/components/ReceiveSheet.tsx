@@ -197,8 +197,9 @@ function ReceiveSheet({ onClose }: { onClose: () => void }) {
               </button>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">
-              Send any CIP-56 token to this party — incoming transfers are
-              accepted automatically.
+              Send any of this app&apos;s configured tokens to this party —
+              those CIP-56 transfers are accepted automatically. Other
+              instruments stay as offers we cannot accept.
             </p>
           </div>
 

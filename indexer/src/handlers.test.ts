@@ -305,6 +305,27 @@ test('E13: TransferInstruction payout gated on the interface VIEW, not templateI
   assert.equal(payout!.op === 'insertPayout' && payout!.amount, '5.0');
 });
 
+test('E13: the eventId/slotId meta stamp yields the bare event id (payouts.event_id is an FK)', () => {
+  const c = cfg();
+  const state = new ProjectorState();
+  // What the registry-token payout path actually stamps (05 §5): eventId "/" slotId, where the
+  // slot id is the attendee's email. The composite must never reach payouts.event_id.
+  const node = createdWithView('ti2', CONCRETE_TI, IF_TI, {
+    transfer: {
+      sender: 'appOperator',
+      receiver: 'alice',
+      amount: '5.0',
+      meta: { values: { 'showorsow.dev/event': 'E1/alice@example.com' } },
+    },
+  });
+  const ups = handleUpdate(update('7', [node]), state, c);
+  const payout = ups.find((u) => u.op === 'insertPayout');
+  assert.ok(payout, 'a composite stamp is still attributable');
+  assert.equal(payout!.op === 'insertPayout' && payout!.eventId, 'E1', 'only the event id goes in the FK column');
+  assert.equal(payout!.op === 'insertPayout' && payout!.attendeeParty, 'alice', 'the slot id is already covered by the receiver');
+  assert.equal(ups.find((u) => u.op === 'insertPayoutUnattributed'), undefined, 'a composite stamp is not unattributed');
+});
+
 test('E15/E15b: pot Holding create+archive via interface view / stored cid (F2)', () => {
   const c = cfg();
   const state = new ProjectorState();

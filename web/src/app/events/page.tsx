@@ -145,6 +145,9 @@ function DayLabel({ iso }: { iso: string }) {
 
 function TimelineCard({ row }: { row: EventListRow }) {
   const ev = row.event;
+  // The backend carries venue on the sibling `meta` object, not on the event
+  // (same read as EventHero / discover).
+  const venue = ev.venue || row.meta?.venue;
   const organizer = row.headcount !== undefined;
   const host = organizer ? "You" : hostLabel(ev.organizerParty);
   const time = new Date(ev.eventEnd).toLocaleTimeString("en-US", {
@@ -165,10 +168,10 @@ function TimelineCard({ row }: { row: EventListRow }) {
             Hosted by <span className="text-text">{host}</span>
           </p>
         )}
-        {ev.venue && (
+        {venue && (
           <p className="flex items-center gap-1.5 truncate text-sm text-muted-foreground">
             <MapPin className="size-3.5 shrink-0" />
-            {ev.venue}
+            {venue}
           </p>
         )}
         <div className="mt-1.5 flex flex-wrap items-center gap-2">

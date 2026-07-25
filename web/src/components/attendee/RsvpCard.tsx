@@ -25,10 +25,12 @@ import {
   PartyPopper,
   RefreshCcw,
   Sparkles,
+  Ticket,
 } from "lucide-react";
 
 // RsvpCard — the Luma-style "Registration" card (sticky right column of the
 // event page). One card, every attendee state:
+//   no rsvp      → "not registered" + self-service Register (public join path)
 //   invited      → Reserve & stake CTA (+ decline)
 //   accepted     → allocation didn't land → Retry stake
 //   staked       → "You're in" + stake locked (+ cancel, ONLY if not checked in)
@@ -63,6 +65,10 @@ export function RsvpCard({
   const [outcome, setOutcome] = useState<StepperOutcome>("pending");
 
   const beforeDeadline = new Date(ev.rsvpDeadline).getTime() > Date.now();
+  // Joining needs the event still open, not just the deadline unpassed: an
+  // organizer can settle before the deadline, which would leave a live-looking
+  // Register button that only ever 409s.
+  const openForJoin = beforeDeadline && ev.status === "open";
   const stakeLabel = `${formatAmount(ev.stakeAmount)} ${tokenLabelOf(ev)}`;
 
   async function runStake(fn: () => Promise<MyRsvp>) {
@@ -91,6 +97,27 @@ export function RsvpCard({
       }
       setTimeout(() => setStepping(false), 1400);
       onMutate();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Self-service join — the same public path /discover's Register button uses.
+  // A 409 means we already have an RSVP the read model had not projected yet,
+  // so refetching is the answer there, not an error toast.
+  async function join() {
+    setBusy(true);
+    try {
+      await api.join(ev.eventId);
+      onMutate();
+    } catch (err) {
+      // 409 is either "already registered" (read model lagging — refetch) or
+      // "registration closed", which is a real failure the user must see.
+      if (err instanceof ApiError && err.status === 409 && !/closed/i.test(err.message ?? "")) {
+        onMutate();
+      } else {
+        pushError(err, "Could not register");
+      }
     } finally {
       setBusy(false);
     }
@@ -131,6 +158,45 @@ export function RsvpCard({
   }
 
   function renderState() {
+    // Signed in but never joined — the backend answers {"myRsvp": null} for
+    // anyone opening an event they are not part of (a shared link, a card on
+    // /discover). Offer the public join rather than a dead or crashing card.
+    if (!myRsvp) {
+      return (
+        <div className="flex flex-col gap-4">
+          <StateHeader
+            icon={<Ticket className="size-5" />}
+            tone="refund"
+            title="You're not registered for this event"
+            sub="Register to reserve a spot — you stake next, and it comes back when you check in."
+          />
+          <div className="flex items-center gap-2.5 rounded-xl border border-line bg-accent/40 px-3 py-2.5">
+            <TokenLogo label={tokenLabelOf(ev)} size={26} />
+            <div className="leading-tight">
+              <p className="mono text-sm font-semibold text-text">
+                {stakeLabel}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                refundable stake, locked in {tokenLabelOf(ev)} escrow
+              </p>
+            </div>
+          </div>
+          <Button
+            size="lg"
+            className="w-full rounded-xl"
+            disabled={busy || !openForJoin}
+            onClick={join}
+          >
+            {openForJoin
+              ? busy
+                ? "Registering…"
+                : "Register for this event"
+              : "RSVP closed"}
+          </Button>
+        </div>
+      );
+    }
+
     // Checked in — celebration, stake committed, NO cancel. checkedIn wins over
     // any non-settled status: it only ever comes from a real on-ledger CheckIn,
     // and a checked-in attendee cannot cancel (Daml + backend enforce it), so a
@@ -359,7 +425,7 @@ function Note({
   );
 }
 
-// Contract pin (copied from AttendeePanel): deltas[].party is the display
+// Contract pin: deltas[].party is the display
 // label, not the raw party id; match on name/email, fall back only when the
 // response is single-row.
 function findMyDelta(

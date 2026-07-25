@@ -184,6 +184,30 @@ func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The first attempt may have locked the stake and then died before
+	// RecordAllocation — or simply landed while the read model still said
+	// 'accepted'. Either way an Allocation for this slot already holds the
+	// attendee's money, and nothing in the app can cancel an Allocation the RSVP
+	// does not point at: allocating a second time would lock a second stake and
+	// strand the first for good. Adopt the existing one instead. A lookup error
+	// falls through to the normal path so a broken ACS query cannot block the
+	// retry, and RecordAllocation re-validates the match on-ledger anyway.
+	if allocCid, findErr := s.findAllocation(ctx(r), s.cfg.AppOperatorParty, ev.EventID+"/"+rv.SlotID); findErr == nil && allocCid != "" {
+		recordTx, err := s.recordAllocation(ctx(r), rsvpCid, allocCid)
+		if err != nil {
+			writeJSON(w, http.StatusBadGateway, errBody{
+				Error:   "allocation failed",
+				Stage:   "allocate",
+				Detail:  err.Error(),
+				ErrorID: logAndID("allocate-record-existing", err),
+				RSVPCid: rsvpCid,
+			})
+			return
+		}
+		s.respondRSVP(w, r, rv.EventID, attendeeParty, recordTx)
+		return
+	}
+
 	allocTx, err := s.runAllocation(ctx(r), ev, rv.SlotID, attendeeParty, rsvpCid)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errBody{
@@ -324,10 +348,19 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		}
 	}
 
-	// RecordAllocation(allocCid) as appOperator — the choice re-validates that
-	// the allocation matches this RSVP (04 §1.4).
+	if _, err := s.recordAllocation(ctx, stakedCid, allocCid); err != nil {
+		return "", fmt.Errorf("RecordAllocation: %w", err)
+	}
+	return allocResp.TxID(), nil
+}
+
+// recordAllocation exercises RecordAllocation(allocCid) as appOperator and
+// returns the update id. The choice re-validates that the allocation matches
+// this RSVP — executor, settlementRef, sender, receiver, amount and instrument
+// (04 §1.4) — so a wrong allocation can never be attached to a stake.
+func (s *Server) recordAllocation(ctx context.Context, stakedCid, allocCid string) (string, error) {
 	recArg, _ := json.Marshal(map[string]any{"allocCid": allocCid})
-	_, err = s.ledger.SubmitAndWait(ctx, appOperatorParty, "record-"+newID(),
+	resp, err := s.ledger.SubmitAndWait(ctx, s.cfg.AppOperatorParty, "record-"+newID(),
 		[]ledger.Command{{ExerciseCommand: &ledger.ExerciseCommand{
 			TemplateID:     s.pkg.TemplateID(ledger.TplStakedRSVP),
 			ContractID:     stakedCid,
@@ -335,9 +368,9 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 			ChoiceArgument: recArg,
 		}}}, nil)
 	if err != nil {
-		return "", fmt.Errorf("RecordAllocation: %w", err)
+		return "", err
 	}
-	return allocResp.TxID(), nil
+	return resp.TxID(), nil
 }
 
 // allocationFactoryCid discovers the on-ledger AllocationFactory contract id
@@ -388,36 +421,47 @@ func (s *Server) allocationFactoryCid(ctx context.Context, party string) (string
 	return "", errors.New("no AllocationFactory visible on-ledger (is the demo-token DAR deployed?)")
 }
 
+// findAllocation returns the cid of the live Allocation whose settlementRef.id
+// matches, or "" when none is visible to opParty. settlementRef.id is
+// eventId/slotId, unique per RSVP, so a match identifies exactly one stake.
+func (s *Server) findAllocation(ctx context.Context, opParty, settlementRefID string) (string, error) {
+	acs, err := s.ledger.ActiveContracts(ctx, opParty, []ledger.CumulativeFilter{{
+		InterfaceFilter: &ledger.InterfaceFilter{
+			InterfaceID:          ledger.AllocationInterfaceID,
+			IncludeInterfaceView: true,
+		},
+	}})
+	if err != nil {
+		return "", err
+	}
+	for _, ac := range acs {
+		raw, ok := ac.InterfaceViewValue("Splice.Api.Token.AllocationV1:Allocation")
+		if !ok {
+			continue
+		}
+		var v struct {
+			Allocation struct {
+				Settlement struct {
+					SettlementRef struct {
+						ID string `json:"id"`
+					} `json:"settlementRef"`
+				} `json:"settlement"`
+			} `json:"allocation"`
+		}
+		if json.Unmarshal(raw, &v) == nil && v.Allocation.Settlement.SettlementRef.ID == settlementRefID {
+			return ac.CreatedEvent.ContractID, nil
+		}
+	}
+	return "", nil
+}
+
 // pollAllocation polls appOperator's active Allocations for one whose
 // settlementRef.id matches, up to a short deadline (§3.5 "poll → Completed").
 func (s *Server) pollAllocation(ctx context.Context, opParty, settlementRefID string) (string, error) {
 	deadline := time.Now().Add(15 * time.Second)
 	for {
-		acs, err := s.ledger.ActiveContracts(ctx, opParty, []ledger.CumulativeFilter{{
-			InterfaceFilter: &ledger.InterfaceFilter{
-				InterfaceID:          ledger.AllocationInterfaceID,
-				IncludeInterfaceView: true,
-			},
-		}})
-		if err == nil {
-			for _, ac := range acs {
-				raw, ok := ac.InterfaceViewValue("Splice.Api.Token.AllocationV1:Allocation")
-				if !ok {
-					continue
-				}
-				var v struct {
-					Allocation struct {
-						Settlement struct {
-							SettlementRef struct {
-								ID string `json:"id"`
-							} `json:"settlementRef"`
-						} `json:"settlement"`
-					} `json:"allocation"`
-				}
-				if json.Unmarshal(raw, &v) == nil && v.Allocation.Settlement.SettlementRef.ID == settlementRefID {
-					return ac.CreatedEvent.ContractID, nil
-				}
-			}
+		if cid, err := s.findAllocation(ctx, opParty, settlementRefID); err == nil && cid != "" {
+			return cid, nil
 		}
 		if time.Now().After(deadline) {
 			return "", errors.New("allocation not found within deadline")
@@ -674,11 +718,17 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 		Before string `json:"before"`
 		After  string `json:"after"`
 	}
+	// Empty, not nil: the web pins all three as non-nullable arrays, and an
+	// attendee whose rows are all filtered out below would otherwise get null.
 	out := struct {
 		Settlements []settlementEntry `json:"settlements"`
 		Payouts     []payoutEntry     `json:"payouts"`
 		Deltas      []deltaEntry      `json:"deltas"`
-	}{}
+	}{
+		Settlements: []settlementEntry{},
+		Payouts:     []payoutEntry{},
+		Deltas:      []deltaEntry{},
+	}
 	// An attendee only sees the row for their own party.
 	mine := func(rowParty string) bool { return isOrganizer || rowParty == party }
 	for _, rrow := range rows {

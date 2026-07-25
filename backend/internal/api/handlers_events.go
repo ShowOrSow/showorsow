@@ -186,15 +186,29 @@ func (s *Server) handleListEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The web marks a row as one this user organizes by the PRESENCE of headcount
+	// (there is no global role), so it must be emitted — as a pointer, since a
+	// host with nobody staked yet still organizes the event.
+	going, err := s.store.CountStakedByEvent(ctx(r))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	type item struct {
-		Event    eventView `json:"event"`
-		Meta     metaView  `json:"meta"`
-		MyStatus string    `json:"myStatus,omitempty"`
+		Event     eventView `json:"event"`
+		Meta      metaView  `json:"meta"`
+		Headcount *int      `json:"headcount,omitempty"`
+		MyStatus  string    `json:"myStatus,omitempty"`
 	}
 	out := make([]item, 0, len(rows))
 	for i := range rows {
 		e := &rows[i]
 		it := item{Event: toEventView(e), Meta: toMetaView(e)}
+		if e.OrganizerParty == party {
+			n := going[e.EventID]
+			it.Headcount = &n
+		}
 		// myStatus reflects the user's own RSVP where one exists (an organizer
 		// viewing their own event usually has none).
 		if rsvp, err := s.store.GetRSVP(ctx(r), e.EventID, party); err == nil {

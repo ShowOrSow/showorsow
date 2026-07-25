@@ -173,7 +173,10 @@ export function AuthForms({ mode }: { mode: "login" | "signup" }) {
 
         <button
           type="submit"
-          disabled={!valid || submitting}
+          // Gated by the same probe as the banner above: leaving submit live
+          // meant the banner said "closed" and the click still went out, only
+          // to come back as a red 403 toast.
+          disabled={!valid || submitting || (isSignup && signupDisabled)}
           className="rounded-lg bg-gold px-4 py-2.5 text-sm font-semibold text-ink hover:brightness-95 disabled:opacity-50"
         >
           {submitting
