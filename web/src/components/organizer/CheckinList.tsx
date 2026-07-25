@@ -50,7 +50,10 @@ export function CheckinList({
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-line bg-surface p-5">
-      <div className="flex items-center justify-between gap-2">
+      {/* Wraps: heading + caption + the nowrap Scan button need ~314px, more
+          than the card's inner width on a phone, and "Check-in" itself was
+          breaking across two lines at 320px. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
         <h3 className="font-semibold">Check-in</h3>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">at the venue · one-way</span>

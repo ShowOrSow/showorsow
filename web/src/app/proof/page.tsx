@@ -221,16 +221,19 @@ function TokenSection({
         <p className="text-xs font-semibold uppercase tracking-wide text-faint">
           Balances after the runs
         </p>
+        {/* Rows stack on phones: the note ("5.0 − 1.0 sent, stake refunded") is
+            ~168px and never shrinks, which left ~34px for the party name at
+            320px — clipped to "sho…", exactly the part that tells rows apart. */}
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {balances.map((b) => (
             <div
               key={b.party}
-              className="flex items-baseline justify-between gap-3 rounded-xl border border-line px-3 py-2"
+              className="flex flex-col gap-1 rounded-xl border border-line px-3 py-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3"
             >
               <span className="mono truncate text-sm text-muted-foreground">
                 showorsow-{b.party}
               </span>
-              <span className="shrink-0 text-right">
+              <span className="shrink-0 sm:text-right">
                 <span className="mono font-semibold tabular-nums text-text">
                   {b.amount}
                 </span>{" "}
