@@ -9,9 +9,16 @@ Stake to RSVP. Show up and get it back. Ghosts fund the people who came.</p>
 
 > The logo is the pitch: your stake is a **seed**, planted below the ticket's perforation line the moment you RSVP. Show up — you harvest it back, plus a share of the pot. Ghost — your seed still grows, **but the people who came harvest it.**
 
-![Canton](https://img.shields.io/badge/Canton_Network-Daml_3.4-E4B34A) ![Go](https://img.shields.io/badge/backend-Go_1.25-00ADD8) ![Next.js](https://img.shields.io/badge/web-Next.js_15-black) ![TypeScript](https://img.shields.io/badge/indexer-TypeScript-3178C6) ![HackCanton S2](https://img.shields.io/badge/HackCanton_S2-RWA_%26_Business_Workflows-5BBF8A)
+<p align="center">
+  <a href="https://showorsow.vercel.app"><b>▶ Live demo</b></a> ·
+  <a href="https://showorsow.vercel.app/proof"><b>DevNet transaction receipts</b></a>
+</p>
 
-> Built for **HackCanton Season 2** · Track: **RWA & Business Workflows** · Challenges: **cBTC (BitSafe)** + **cETH (OnRails)**
+<p align="center"><sub>The demo runs against the shared <b>hackcanton-01 DevNet</b> with real cBTC and cETH — not a sandbox. Sign-in uses the seeded demo accounts on the login page; signup is closed because the parties are provisioned by the node operator.</sub></p>
+
+![Canton](https://img.shields.io/badge/Canton_Network-Daml_3.5-E4B34A) ![Go](https://img.shields.io/badge/backend-Go_1.25-00ADD8) ![Next.js](https://img.shields.io/badge/web-Next.js_15-black) ![TypeScript](https://img.shields.io/badge/indexer-TypeScript-3178C6) ![HackCanton S2](https://img.shields.io/badge/HackCanton_S2-Open_Track-5BBF8A)
+
+> Built for **HackCanton Season 2** · Track: **Open** · Challenges: **cBTC (BitSafe)** + **cETH (OnRails)**
 
 ---
 
@@ -46,7 +53,7 @@ Everything is written against the **generic CIP-56 interfaces** — the stake to
 ```mermaid
 flowchart LR
     subgraph client["Browser"]
-        WEB["Next.js web\npersona switcher · 2s SWR polling"]
+        WEB["Next.js web\naccount sessions · 2s SWR polling"]
     end
     subgraph services["Off-ledger services"]
         API["Go backend\nREST /api/* · the ONLY ledger writer\nstake · settlement · payout runners"]
@@ -137,12 +144,12 @@ backend/      Go — REST API (13 endpoints), stake/settlement/payout runners,
 indexer/      TypeScript — ledger update stream → Postgres projections (E1–E16),
               exactly-once (offset + batch in one transaction), poll fallback
 web/          Next.js 15 — role-adaptive event page (organizer check-in/settle vs
-              attendee stake state machine), persona switcher, settlement results
+              attendee stake state machine), account menu, settlement results
 ```
 
 ## Getting started
 
-**Prerequisites:** Go ≥ 1.25 · Node ≥ 22 + pnpm · PostgreSQL (Neon or local) · [Daml SDK / dpm](https://docs.digitalasset.com) 3.4.x for the contracts · Docker (optional, for a local Canton LocalNet).
+**Prerequisites:** Go ≥ 1.25 · Node ≥ 22 + pnpm · PostgreSQL (Neon or local) · [Daml SDK / dpm](https://docs.digitalasset.com) 3.5.x for the contracts · Docker (optional, for a local Canton LocalNet).
 
 ```bash
 # 0. Configure
@@ -172,14 +179,14 @@ One event, 0.01 cBTC stake, three attendees. Alice and Bob check in; Charlie gho
 
 Honesty section — judges deserve the truth:
 
-- **Real:** every ledger action — contract creation, allocation locking, check-in, settlement, redistribution — executes on a Canton ledger via the JSON Ledger API v2 against real CIP-56 interfaces.
-- **Simulated:** the venue (this is software — someone still has to stand at a door); the frontend plays the *wallet role* for allocations (wallet-side `AllocationRequest` rendering is still immature ecosystem-wide) — the demo says so on screen.
-- **Known limitations:** attendees can `Allocation_Withdraw` pre-settlement (by standard design — we detect it and void the RSVP); wire shapes for the registry/ledger APIs are validated against docs and a sandbox, pending a full DevNet integration pass; auth is demo-grade persona sessions (deliberate — the identity model is Canton parties, not passwords).
+- **Real:** every ledger action — contract creation, allocation locking, check-in, settlement, redistribution — executes on a Canton ledger via the JSON Ledger API v2 against real CIP-56 interfaces. The hosted demo runs on the shared **hackcanton-01 DevNet** against the live **cBTC** (BitSafe) and **cETH** (onRails) registries, so staking there moves real registry holdings. Two complete cBTC cycles and one cETH cycle — including a slash and its pot redistribution — are on [/proof](https://showorsow.vercel.app/proof) with the update id for every step. Creating an event, staking and checking in each report their transaction id in the UI as it happens.
+- **Simulated:** the venue (this is software — someone still has to stand at a door); the frontend plays the *wallet role* for allocations, because wallet-side `AllocationRequest` rendering is still immature ecosystem-wide.
+- **Known limitations:** attendees can `Allocation_Withdraw` pre-settlement (by standard design — we detect it and void the RSVP); transaction ids are surfaced at the moment of the action rather than persisted per row, so reopening an event later does not replay them; signup is closed on the hosted demo because allocating a party needs participant admin rights we do not hold on a shared node — judges use the seeded accounts.
 
 ## Hackathon fit
 
-- **Track — RWA & Business Workflows:** a pilot-ready real-world workflow: issuance (stake) → state change (check-in) → transfer (settlement) → fulfillment (attendance) → audit (per-row ledger transaction ids in the UI).
-- **cBTC Ecosystem Challenge:** "CBTC escrow" is a named lane in the brief — the token *moves, settles, locks, and powers the app logic* here, generating recurring on-chain activity per event.
+- **Track — Open:** a pilot-ready real-world workflow: issuance (stake) → state change (check-in) → transfer (settlement) → fulfillment (attendance) → audit (the ledger transaction id for each action, surfaced in the UI and on /proof).
+- **cBTC Ecosystem Challenge:** the asset does real work — cBTC is **collateral** (`AllocationFactory_Allocate` locks it registry-side as the commitment) and it drives **settlement** (`CloseEvent` refunds attendees and slashes ghosts atomically, then `TransferFactory_Transfer` moves the forfeited stake to the people who came). Receipts for every one of those transactions: [/proof](https://showorsow.vercel.app/proof).
 - **cETH Ecosystem Challenge:** cETH drives real state changes — collateral in, conditional settlement out. Token-agnostic by construction: same code, config swap.
 
 ## License
