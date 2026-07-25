@@ -57,6 +57,12 @@ func (f *fakeDataStore) GetEvent(_ context.Context, eventID string) (*store.Even
 func (f *fakeDataStore) ListEventsForUser(context.Context, string) ([]store.EventRow, error) {
 	return nil, nil
 }
+func (f *fakeDataStore) ListDiscoverableEvents(context.Context) ([]store.EventRow, error) {
+	return nil, nil
+}
+func (f *fakeDataStore) CountStakedByEvent(context.Context) (map[string]int, error) {
+	return map[string]int{}, nil
+}
 func (f *fakeDataStore) GetRSVP(context.Context, string, string) (*store.RSVPRow, error) {
 	return nil, store.ErrNotFound
 }

@@ -4,6 +4,9 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "@/components/SessionProvider";
 import { BlurText } from "@/components/reactbits/BlurText";
+import { Aurora } from "@/components/reactbits/Aurora";
+import { NoShowSimulator } from "@/components/landing/NoShowSimulator";
+import { Comparison } from "@/components/landing/Comparison";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -16,6 +19,7 @@ import {
   Check,
   X,
   Lock,
+  PlayCircle,
 } from "lucide-react";
 
 export default function Home() {
@@ -29,8 +33,8 @@ export default function Home() {
     <div className="flex flex-col">
       {/* ---------------- Hero ---------------- */}
       <section className="relative overflow-hidden border-b border-line">
-        <div className="dot-grid pointer-events-none absolute inset-0 opacity-70" />
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[46rem] -translate-x-1/2 rounded-full bg-refund/10 blur-3xl" />
+        {/* React Bits Aurora — drifting colour fields behind the dot grid. */}
+        <Aurora />
         <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-20 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:py-28">
           <div className="flex flex-col items-start gap-6">
             <Badge
@@ -62,13 +66,14 @@ export default function Home() {
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
+              {/* Browsing needs no account — send everyone to the public feed. */}
               <Button
                 asChild
                 size="lg"
                 variant="outline"
                 className="rounded-full border-line px-6"
               >
-                <Link href={secondaryHref}>{secondaryLabel}</Link>
+                <Link href="/discover">Browse events</Link>
               </Button>
             </div>
 
@@ -187,6 +192,58 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------------- Simulator ---------------- */}
+      <section className="border-y border-line bg-surface">
+        <div className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-text">
+              What no-shows actually cost you
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Move the sliders to match your event. The left side is what you
+              burn today; the right side is what a stake gives back.
+            </p>
+          </div>
+          <div className="mt-10">
+            <NoShowSimulator />
+          </div>
+        </div>
+      </section>
+
+      {/* ---------------- Comparison ---------------- */}
+      <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-3xl font-semibold tracking-tight text-text">
+            Free tools, paid tickets, or skin in the game
+          </h2>
+          <p className="mt-3 text-muted-foreground">
+            Paid tickets do fix no-shows — by charging people who show up.
+            ShowOrSow only charges the ones who don&apos;t.
+          </p>
+        </div>
+        <div className="mt-10 rounded-3xl border border-line bg-surface p-2 sm:p-4">
+          <Comparison />
+        </div>
+      </section>
+
+      {/* ---------------- Demo video ---------------- */}
+      <section className="border-y border-line bg-surface">
+        <div className="mx-auto w-full max-w-4xl px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-text">
+              See it run
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Three minutes: RSVP with a stake, scan in at the door, settle —
+              refunds and slashes on a real ledger.
+            </p>
+          </div>
+          <div className="mt-10">
+            <DemoVideo />
+          </div>
+        </div>
+      </section>
+
       {/* ---------------- Demo CTA ---------------- */}
       <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
         <div className="relative overflow-hidden rounded-3xl border border-refund/20 bg-refund/[0.06] px-6 py-14 text-center sm:px-12">
@@ -229,11 +286,54 @@ export default function Home() {
               Show<span className="text-refund">or</span>Sow
             </span>
           </Link>
-          <p className="text-sm text-faint">
-            Built on Canton Network · CIP-56 token standard
-          </p>
+          <div className="flex items-center gap-4 text-sm">
+            <Link href="/proof" className="text-muted-foreground hover:text-refund">
+              DevNet receipts
+            </Link>
+            <span className="text-faint">
+              Built on Canton Network · CIP-56 token standard
+            </span>
+          </div>
         </div>
       </footer>
+    </div>
+  );
+}
+
+// DemoVideo — the walkthrough slot. Drops in an embed the moment
+// NEXT_PUBLIC_DEMO_VIDEO_URL is set (YouTube/Loom share URL); until then it
+// shows a placeholder that links to the live demo instead of a dead frame.
+function DemoVideo() {
+  const url = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL;
+  if (url) {
+    return (
+      <div className="overflow-hidden rounded-3xl border border-line bg-ink shadow-[0_18px_50px_-30px_rgba(16,24,32,0.4)]">
+        <div className="relative aspect-video">
+          <iframe
+            src={url}
+            title="ShowOrSow demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            className="absolute inset-0 h-full w-full"
+          />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex aspect-video flex-col items-center justify-center gap-4 rounded-3xl border border-dashed border-line bg-ink text-center">
+      <span className="flex size-14 items-center justify-center rounded-2xl bg-accent text-refund">
+        <PlayCircle className="size-7" />
+      </span>
+      <div>
+        <p className="font-medium text-text">Demo video coming shortly</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Meanwhile, the live app is one click away.
+        </p>
+      </div>
+      <Button asChild variant="outline" className="rounded-full border-line">
+        <Link href="/discover">Open the live demo</Link>
+      </Button>
     </div>
   );
 }

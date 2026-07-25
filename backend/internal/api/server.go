@@ -32,6 +32,9 @@ type dataStore interface {
 	WriteEventMeta(ctx context.Context, m store.EventMeta) error
 	GetEvent(ctx context.Context, eventID string) (*store.EventRow, error)
 	ListEventsForUser(ctx context.Context, party string) ([]store.EventRow, error)
+	// Public discovery feed: open events + aggregate going counts (never who).
+	ListDiscoverableEvents(ctx context.Context) ([]store.EventRow, error)
+	CountStakedByEvent(ctx context.Context) (map[string]int, error)
 	GetRSVP(ctx context.Context, eventID, attendeeParty string) (*store.RSVPRow, error)
 	GetRSVPByCid(ctx context.Context, rsvpCid string) (*store.RSVPRow, error)
 	GetRSVPByInviteCid(ctx context.Context, inviteCid string) (*store.RSVPRow, error)
@@ -152,6 +155,9 @@ func (s *Server) Routes() http.Handler {
 	// Events
 	mux.HandleFunc("POST /api/events", s.handleCreateEvent)
 	mux.HandleFunc("GET /api/events", s.handleListEvents)
+	// Public discovery feed + self-service RSVP (no invite needed).
+	mux.HandleFunc("GET /api/discover", s.handleDiscover)
+	mux.HandleFunc("POST /api/events/{eventId}/join", s.handleJoin)
 	mux.HandleFunc("GET /api/events/{eventId}", s.handleGetEvent)
 	mux.HandleFunc("POST /api/events/{eventId}/invites", s.handleInvite)
 	mux.HandleFunc("POST /api/events/{eventId}/checkin", s.handleCheckin)

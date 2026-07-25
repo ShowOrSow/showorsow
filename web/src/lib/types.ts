@@ -150,6 +150,17 @@ export interface EventListRow {
   myStatus?: RsvpStatus;
 }
 
+// GET /api/discover — the public feed. Works signed-out (myStatus/isOrganizer
+// are simply absent). `going` is the aggregate staked count — never identities.
+export interface DiscoverRow {
+  event: EventCore;
+  meta?: EventMeta;
+  going: number;
+  hostLabel?: string;
+  myStatus?: RsvpStatus;
+  isOrganizer?: boolean;
+}
+
 // Organizer detail rsvp row. Post-pivot: carries the invitee's real name/email
 // (rows render name/email — 08 §2) and their Canton party (check-in posts
 // {attendeeParty} — 05 §2).

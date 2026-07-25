@@ -32,8 +32,20 @@ export function Header() {
           </span>
         </Link>
 
-        {isAuthenticated && (
-          <nav className="flex items-center gap-1 text-sm">
+        {/* Discover is public (browsing needs no account); Events is personal. */}
+        <nav className="flex items-center gap-1 text-sm">
+          <Link
+            href="/discover"
+            className={cn(
+              "rounded-full px-3 py-1.5 transition-colors",
+              pathname.startsWith("/discover")
+                ? "bg-secondary font-medium text-text"
+                : "text-muted-foreground hover:bg-secondary hover:text-text",
+            )}
+          >
+            Discover
+          </Link>
+          {isAuthenticated && (
             <Link
               href="/events"
               className={cn(
@@ -43,10 +55,10 @@ export function Header() {
                   : "text-muted-foreground hover:bg-secondary hover:text-text",
               )}
             >
-              Events
+              My events
             </Link>
-          </nav>
-        )}
+          )}
+        </nav>
 
         <div className="ml-auto flex items-center gap-2">
           {isAuthenticated && (

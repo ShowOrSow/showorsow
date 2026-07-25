@@ -195,6 +195,52 @@ func (s *Store) ListEventsForUser(ctx context.Context, party string) ([]EventRow
 	return scanEventRows(rows)
 }
 
+// ListDiscoverableEvents returns every OPEN event whose RSVP deadline has not
+// passed — the public discovery feed. Discovery is deliberately public: the
+// event itself (title, venue, stake) is an advert, while WHO is attending stays
+// private (attendees are never observers of each other's contracts). Ordered by
+// soonest first so the feed reads like a calendar.
+func (s *Store) ListDiscoverableEvents(ctx context.Context) ([]EventRow, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT e.event_id, e.contract_id, e.organizer_party, e.title,
+		       e.stake_amount::text, e.instrument_admin, e.instrument_id,
+		       e.rsvp_deadline, e.event_end, e.settle_before, e.status::text,
+		       COALESCE(m.description,''), COALESCE(m.venue,''), COALESCE(m.image_url,'')
+		FROM events e
+		LEFT JOIN event_meta m ON m.event_id = e.event_id
+		WHERE e.status = 'open' AND e.rsvp_deadline > now()
+		ORDER BY e.event_end ASC
+		LIMIT 200`)
+	if err != nil {
+		return nil, err
+	}
+	return scanEventRows(rows)
+}
+
+// CountStakedByEvent returns eventId → number of STAKED rsvps, for the
+// discovery feed's "N going" badge. Only the aggregate is exposed — never the
+// attendee identities (07 §3 privacy).
+func (s *Store) CountStakedByEvent(ctx context.Context) (map[string]int, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT event_id, COUNT(*) FROM rsvps
+		WHERE status = 'staked' OR checked_in = true
+		GROUP BY event_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var id string
+		var n int
+		if err := rows.Scan(&id, &n); err != nil {
+			return nil, err
+		}
+		out[id] = n
+	}
+	return out, rows.Err()
+}
+
 func scanEventRows(rows pgx.Rows) ([]EventRow, error) {
 	defer rows.Close()
 	var out []EventRow

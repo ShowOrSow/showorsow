@@ -132,6 +132,47 @@
 }
 .toast-in { animation: toast-in 0.18s ease-out; }
 
+/* Aurora hero background (React Bits, CSS variant) — three slow-drifting blobs
+   under the dot grid. Emerald-led, low opacity: it should read as depth, never
+   as decoration competing with the headline. */
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(72px);
+  will-change: transform;
+}
+.aurora-a {
+  top: -14rem; left: 8%;
+  width: 40rem; height: 30rem;
+  background: radial-gradient(circle at 30% 40%, color-mix(in srgb, var(--color-refund) 34%, transparent), transparent 70%);
+  animation: aurora-drift-a 22s ease-in-out infinite;
+}
+.aurora-b {
+  top: -8rem; right: 4%;
+  width: 34rem; height: 26rem;
+  background: radial-gradient(circle at 60% 40%, color-mix(in srgb, var(--color-info) 26%, transparent), transparent 70%);
+  animation: aurora-drift-b 27s ease-in-out infinite;
+}
+.aurora-c {
+  bottom: -16rem; left: 34%;
+  width: 36rem; height: 24rem;
+  background: radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--color-gold) 22%, transparent), transparent 70%);
+  animation: aurora-drift-c 31s ease-in-out infinite;
+}
+@keyframes aurora-drift-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(6%, 4%, 0) scale(1.12); }
+}
+@keyframes aurora-drift-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+  50%      { transform: translate3d(-7%, 6%, 0) scale(0.95); }
+}
+@keyframes aurora-drift-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50%      { transform: translate3d(4%, -6%, 0) scale(1.1); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .step-active, .flash-green, .flash-red, .toast-in, .animate-pulse { animation: none; }
+  .aurora-blob { animation: none; }
 }

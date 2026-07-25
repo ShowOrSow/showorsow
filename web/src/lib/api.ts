@@ -15,6 +15,7 @@ import type {
   Balance,
   CreateEventBody,
   EventDetail,
+  DiscoverRow,
   EventListRow,
   FaucetResult,
   LoginBody,
@@ -123,6 +124,14 @@ export const api = {
       method: "POST",
       json: { tokenLabel },
     }),
+
+  // Public discovery feed + self-service RSVP (no invite needed).
+  discover: () => request<DiscoverRow[]>("/api/discover"),
+  join: (eventId: string) =>
+    request<{ eventId: string; joined: boolean }>(
+      `/api/events/${encodeURIComponent(eventId)}/join`,
+      { method: "POST" },
+    ),
 
   // Events
   getEvents: () => request<EventListRow[]>("/api/events"),
