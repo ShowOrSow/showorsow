@@ -22,22 +22,6 @@ export function coverFor(eventId: string): string {
   return COVERS[hashOf(eventId) % COVERS.length];
 }
 
-// Stock cover photos (Wikimedia Commons, CC BY-SA / CC BY — see
-// public/brand/events/CREDITS.md). An event with no uploaded image still looks
-// like a real listing instead of a coloured rectangle; the gradient stays as
-// the backdrop while the photo loads.
-const PHOTOS = [
-  "/brand/events/monas.jpg",
-  "/brand/events/borobudur.jpg",
-  "/brand/events/jakarta.jpg",
-  "/brand/events/bandung.jpg",
-  "/brand/events/bromo.jpg",
-  "/brand/events/gbk.jpg",
-];
-
-export function photoFor(eventId: string): string {
-  return PHOTOS[hashOf(eventId) % PHOTOS.length];
-}
 
 function hashOf(s: string): number {
   let h = 0;
@@ -62,15 +46,17 @@ export function EventSideCard({ ev, meta }: { ev: EventCore; meta?: EventMeta })
       <div
         className={`relative aspect-square w-full overflow-hidden rounded-2xl bg-gradient-to-br shadow-sm ${coverFor(ev.eventId)}`}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={meta?.imageUrl || photoFor(ev.eventId)}
-          alt=""
-          className="h-full w-full object-cover"
-        />
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-3 text-sm font-semibold tracking-wide text-white">
-          {ev.title}
-        </span>
+        {meta?.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={meta.imageUrl} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <>
+            <Ticket className="absolute left-1/2 top-1/2 size-20 -translate-x-1/2 -translate-y-1/2 rotate-12 text-white/50" />
+            <span className="absolute bottom-4 left-0 right-0 text-center text-sm font-semibold tracking-wide text-white/80">
+              {ev.title}
+            </span>
+          </>
+        )}
       </div>
 
       {host && (

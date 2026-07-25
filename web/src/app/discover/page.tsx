@@ -7,7 +7,7 @@ import useSWR from "swr";
 import type { DiscoverRow } from "@/lib/types";
 import { api, ApiError, formatAmount } from "@/lib/api";
 import { tokenLabelOf } from "@/lib/format";
-import { coverFor, photoFor } from "@/components/EventHero";
+import { coverFor } from "@/components/EventHero";
 import { TokenLogo } from "@/components/TokenLogo";
 import { useSession } from "@/components/SessionProvider";
 import { useToast } from "@/components/ToastProvider";
@@ -177,13 +177,17 @@ function DiscoverCard({
             coverFor(ev.eventId),
           )}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={row.meta?.imageUrl || photoFor(ev.eventId)}
-            alt=""
-            loading="lazy"
-            className="h-full w-full object-cover"
-          />
+          {row.meta?.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={row.meta.imageUrl}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <Ticket className="absolute left-1/2 top-1/2 size-10 -translate-x-1/2 -translate-y-1/2 rotate-12 text-white/60" />
+          )}
           <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 px-2 py-0.5 text-xs font-medium text-text shadow-sm">
             <TokenLogo label={tokenLabelOf(ev)} size={13} />
             {formatAmount(ev.stakeAmount)} {tokenLabelOf(ev)}
