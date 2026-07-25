@@ -112,9 +112,17 @@ function ReceiveSheet({ onClose }: { onClose: () => void }) {
         if (typeof window !== "undefined") {
           window.open(res.url, "_blank", "noopener,noreferrer");
         }
+        // Never dump the full party id into the toast (it overflows the card) —
+        // offer a copy action instead; the address is also visible in the sheet.
         push({
           kind: "info",
-          message: `Paste your party id at the faucet: ${res.party}`,
+          message: "Faucet opened in a new tab — paste your party id there.",
+          action: {
+            label: "Copy party id",
+            onClick: () => {
+              void navigator.clipboard?.writeText(res.party);
+            },
+          },
         });
       } else {
         // Mintable demo token: credited instantly. Revalidate balances so the
@@ -199,15 +207,8 @@ function ReceiveSheet({ onClose }: { onClose: () => void }) {
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <TokenLogo label={t.label} size={22} />
-                    <span className="min-w-0">
-                      <span className="mono block truncate text-sm font-medium text-text">
-                        {t.label}
-                      </span>
-                      {t.decimals >= 0 && (
-                        <span className="block text-xs text-muted-foreground">
-                          {t.decimals} decimals
-                        </span>
-                      )}
+                    <span className="mono block truncate text-sm font-medium text-text">
+                      {t.label}
                     </span>
                   </span>
                   <button

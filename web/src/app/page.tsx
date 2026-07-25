@@ -82,6 +82,24 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ---------------- Demo video ---------------- */}
+      <section className="border-y border-line bg-surface">
+        <div className="mx-auto w-full max-w-4xl px-4 py-20 sm:px-6">
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight text-text">
+              See it run
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              Three minutes: RSVP with a stake, scan in at the door, settle —
+              refunds and slashes on a real ledger.
+            </p>
+          </div>
+          <div className="mt-10">
+            <DemoVideo />
+          </div>
+        </div>
+      </section>
+
       {/* ---------------- How it works ---------------- */}
       <section className="mx-auto w-full max-w-6xl px-4 py-20 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
@@ -218,24 +236,6 @@ export default function Home() {
         </div>
         <div className="mt-10 rounded-3xl border border-line bg-surface p-2 sm:p-4">
           <Comparison />
-        </div>
-      </section>
-
-      {/* ---------------- Demo video ---------------- */}
-      <section className="border-y border-line bg-surface">
-        <div className="mx-auto w-full max-w-4xl px-4 py-20 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight text-text">
-              See it run
-            </h2>
-            <p className="mt-3 text-muted-foreground">
-              Three minutes: RSVP with a stake, scan in at the door, settle —
-              refunds and slashes on a real ledger.
-            </p>
-          </div>
-          <div className="mt-10">
-            <DemoVideo />
-          </div>
         </div>
       </section>
 

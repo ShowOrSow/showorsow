@@ -45,11 +45,6 @@ export function TokenSelect({
               <span className="flex items-center gap-2">
                 <TokenLogo label={t.label} size={18} />
                 <span className="font-medium">{t.label}</span>
-                {t.decimals >= 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {t.decimals} decimals
-                  </span>
-                )}
               </span>
             </SelectItem>
           ))}

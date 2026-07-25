@@ -2,7 +2,8 @@
 
 import { motion } from "motion/react";
 import { TokenLogo } from "../TokenLogo";
-import { Ticket, MapPin } from "lucide-react";
+import { MonumentArt, type MonumentVariant } from "./MonumentArt";
+import { MapPin } from "lucide-react";
 
 // FloatingCards — the Luma-landing anatomy: mini event cards scattered around
 // a centered headline, drifting gently. Ours carry the one thing Luma's don't:
@@ -13,6 +14,7 @@ type Card = {
   venue: string;
   stake: string;
   token: string;
+  art: MonumentVariant;
   gradient: string;
   className: string; // absolute position
   delay: number;
@@ -22,6 +24,7 @@ type Card = {
 const CARDS: Card[] = [
   {
     title: "Canton Builders Night",
+    art: "monas",
     venue: "Jakarta",
     stake: "0.005",
     token: "cBTC",
@@ -32,6 +35,7 @@ const CARDS: Card[] = [
   },
   {
     title: "Web3 Dev Workshop",
+    art: "skyline",
     venue: "Bandung",
     stake: "0.1",
     token: "cETH",
@@ -42,6 +46,7 @@ const CARDS: Card[] = [
   },
   {
     title: "Founder Dinner",
+    art: "gate",
     venue: "SCBD",
     stake: "0.01",
     token: "cBTC",
@@ -52,6 +57,7 @@ const CARDS: Card[] = [
   },
   {
     title: "Hackathon Demo Day",
+    art: "borobudur",
     venue: "Online",
     stake: "0.05",
     token: "cETH",
@@ -62,6 +68,7 @@ const CARDS: Card[] = [
   },
   {
     title: "Community Meetup",
+    art: "mountain",
     venue: "Yogyakarta",
     stake: "0.005",
     token: "cBTC",
@@ -72,6 +79,7 @@ const CARDS: Card[] = [
   },
   {
     title: "Run Club Sunday",
+    art: "stadium",
     venue: "GBK",
     stake: "0.002",
     token: "cBTC",
@@ -104,10 +112,8 @@ export function FloatingCards() {
           }}
         >
           <div className="overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_16px_40px_-20px_rgba(16,24,32,0.35)]">
-            <div
-              className={`flex h-[4.5rem] items-center justify-center bg-gradient-to-br ${c.gradient}`}
-            >
-              <Ticket className="size-6 rotate-12 text-white/70" />
+            <div className={`h-[4.5rem] overflow-hidden bg-gradient-to-br ${c.gradient}`}>
+              <MonumentArt variant={c.art} />
             </div>
             <div className="flex flex-col gap-1 p-2.5">
               <p className="truncate text-xs font-semibold text-text">{c.title}</p>

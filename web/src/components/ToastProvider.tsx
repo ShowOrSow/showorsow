@@ -101,7 +101,7 @@ function ToastViewport({
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-sm text-text">{t.message}</p>
+              <p className="break-words text-sm text-text">{t.message}</p>
               {(t.stage || t.errorId) && (
                 <p className="mono mt-1 text-xs text-muted-foreground">
                   {t.stage ? `stage: ${t.stage}` : ""}
