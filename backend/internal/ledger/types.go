@@ -86,6 +86,19 @@ type SubmitAndWaitResponse struct {
 	UpdateID        string          `json:"updateId,omitempty"`
 }
 
+// TxID is the ledger update id for this submission — the thing you can look up
+// on the participant afterwards. Deployments differ on where they put it, so
+// prefer the transaction's own id and fall back to the envelope's.
+func (r *SubmitAndWaitResponse) TxID() string {
+	if r == nil {
+		return ""
+	}
+	if r.Transaction.UpdateID != "" {
+		return r.Transaction.UpdateID
+	}
+	return r.UpdateID
+}
+
 // Transaction is the flattened transaction with its top-level events.
 type Transaction struct {
 	UpdateID string  `json:"updateId"`

@@ -121,7 +121,12 @@ func (s *Server) handleCreateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	_, _ = acceptResp.CreatedByTemplate(ledger.TplEvent) // cid tracked by indexer E1
 
-	writeJSON(w, http.StatusOK, map[string]string{"eventId": eventID})
+	// EP_Accept is the transaction that puts the Event on the ledger — return
+	// its update id so the organizer sees the receipt for what they just did.
+	writeJSON(w, http.StatusOK, map[string]string{
+		"eventId": eventID,
+		"txId":    acceptResp.TxID(),
+	})
 }
 
 // eventView is the shared event/meta shape in responses.

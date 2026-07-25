@@ -7,13 +7,14 @@ import type { Token } from "@/lib/types";
 import { toIsoFromLocalInput } from "@/lib/format";
 import { TokenSelect } from "./TokenSelect";
 import { useToast } from "./ToastProvider";
+import { txToast } from "@/lib/txToast";
 
 // EventForm (08 §4 / §2 /events/new): title · description · venue · token ·
 // stake amount · RSVP deadline · event end. Submit → POST /api/events →
 // {eventId} → redirect /events/[eventId]. Backend derives settleBefore.
 export function EventForm() {
   const router = useRouter();
-  const { pushError } = useToast();
+  const { push, pushError } = useToast();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -38,7 +39,7 @@ export function EventForm() {
     if (!valid || submitting) return;
     setSubmitting(true);
     try {
-      const { eventId } = await api.createEvent({
+      const { eventId, txId } = await api.createEvent({
         title: title.trim(),
         description: description.trim(),
         venue: venue.trim(),
@@ -47,6 +48,7 @@ export function EventForm() {
         rsvpDeadline: toIsoFromLocalInput(rsvpDeadline),
         eventEnd: toIsoFromLocalInput(eventEnd),
       });
+      push(txToast("Event created on the ledger", txId));
       router.push(`/events/${encodeURIComponent(eventId)}`);
     } catch (err) {
       pushError(err, "Could not create event");

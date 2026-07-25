@@ -138,7 +138,10 @@ export const api = {
   getEvent: (eventId: string) =>
     request<EventDetail>(`/api/events/${encodeURIComponent(eventId)}`),
   createEvent: (body: CreateEventBody) =>
-    request<{ eventId: string }>("/api/events", { method: "POST", json: body }),
+    request<{ eventId: string; txId?: string }>("/api/events", {
+      method: "POST",
+      json: body,
+    }),
 
   // Organizer actions — invite by email (05 §2); check-in posts {attendeeParty}.
   invite: (eventId: string, email: string) =>

@@ -140,7 +140,8 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 
 	// §3.3–3.5 allocation. On failure the RSVP stays 'accepted'; frontend shows
 	// Retry stake → POST /api/rsvps/{rsvpCid}/stake.
-	if err := s.runAllocation(ctx(r), ev, rv.SlotID, attendeeParty, stakedCid); err != nil {
+	allocTx, err := s.runAllocation(ctx(r), ev, rv.SlotID, attendeeParty, stakedCid)
+	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errBody{
 			Error:   "allocation failed",
 			Stage:   "allocate",
@@ -150,7 +151,7 @@ func (s *Server) handleAccept(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	s.respondRSVP(w, r, rv.EventID, attendeeParty)
+	s.respondRSVP(w, r, rv.EventID, attendeeParty, allocTx)
 }
 
 // POST /api/rsvps/{rsvpCid}/stake — retry endpoint: re-runs §3 steps 3–6 for an
@@ -183,7 +184,8 @@ func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.runAllocation(ctx(r), ev, rv.SlotID, attendeeParty, rsvpCid); err != nil {
+	allocTx, err := s.runAllocation(ctx(r), ev, rv.SlotID, attendeeParty, rsvpCid)
+	if err != nil {
 		writeJSON(w, http.StatusBadGateway, errBody{
 			Error:   "allocation failed",
 			Stage:   "allocate",
@@ -193,12 +195,14 @@ func (s *Server) handleStake(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	s.respondRSVP(w, r, rv.EventID, attendeeParty)
+	// The Allocate is the transaction that actually locks the stake — hand its
+	// update id back so the UI can show what just moved on the ledger.
+	s.respondRSVP(w, r, rv.EventID, attendeeParty, allocTx)
 }
 
 // runAllocation performs §3 steps 3–5: registry discovery + Allocate as
 // attendee + RecordAllocation as appOperator.
-func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, attendeeParty, stakedCid string) error {
+func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, attendeeParty, stakedCid string) (string, error) {
 	// Demo-token mode (05 §6c / 04 §1.7): a pure-Daml demo token has no registry
 	// HTTP API, so we discover the on-ledger AllocationFactory directly and pass
 	// an empty ExtraArgs with no disclosed contracts instead of fetching a
@@ -211,7 +215,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		var err error
 		rc, err = s.registryFor(ev.InstrumentAdmin, ev.InstrumentID)
 		if err != nil {
-			return fmt.Errorf("registry client: %w", err)
+			return "", fmt.Errorf("registry client: %w", err)
 		}
 	}
 
@@ -247,7 +251,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 	// "No holdings provided").
 	holdingCids, err := s.holdingCids(ctx, attendeeParty, ev.InstrumentAdmin, ev.InstrumentID)
 	if err != nil {
-		return fmt.Errorf("gather holdings: %w", err)
+		return "", fmt.Errorf("gather holdings: %w", err)
 	}
 
 	var factoryID string
@@ -258,7 +262,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		// it, so it is visible under the attendee's own party); no registry fetch.
 		fid, err := s.allocationFactoryCid(ctx, attendeeParty)
 		if err != nil {
-			return fmt.Errorf("demo allocation-factory discovery: %w", err)
+			return "", fmt.Errorf("demo allocation-factory discovery: %w", err)
 		}
 		factoryID = fid
 		extra = registry.EmptyExtraArgs()
@@ -275,10 +279,10 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		})
 		cc, err := rc.AllocationFactoryDiscovery(ctx, choiceArgs)
 		if err != nil {
-			return fmt.Errorf("allocation-factory discovery: %w", err)
+			return "", fmt.Errorf("allocation-factory discovery: %w", err)
 		}
 		if cc.FactoryID == "" {
-			return fmt.Errorf("allocation-factory returned no factoryId")
+			return "", fmt.Errorf("allocation-factory returned no factoryId")
 		}
 		factoryID = cc.FactoryID
 		extra = cc.ExtraArgs
@@ -305,7 +309,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 			ChoiceArgument: allocateArg,
 		}}}, disclosed)
 	if err != nil {
-		return fmt.Errorf("AllocationFactory_Allocate: %w", err)
+		return "", fmt.Errorf("AllocationFactory_Allocate: %w", err)
 	}
 
 	// §3.5 Poll the AllocationInstruction result → on Completed the Allocation
@@ -316,7 +320,7 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 		// resulting Allocation matching our settlementRef.
 		allocCid, err = s.pollAllocation(ctx, appOperatorParty, settlementRefID)
 		if err != nil {
-			return fmt.Errorf("await allocation completion: %w", err)
+			return "", fmt.Errorf("await allocation completion: %w", err)
 		}
 	}
 
@@ -331,9 +335,9 @@ func (s *Server) runAllocation(ctx context.Context, ev *store.EventRow, slotID, 
 			ChoiceArgument: recArg,
 		}}}, nil)
 	if err != nil {
-		return fmt.Errorf("RecordAllocation: %w", err)
+		return "", fmt.Errorf("RecordAllocation: %w", err)
 	}
-	return nil
+	return allocResp.TxID(), nil
 }
 
 // allocationFactoryCid discovers the on-ledger AllocationFactory contract id
@@ -581,7 +585,7 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 
 	orgParty := ev.OrganizerParty
 	arg, _ := json.Marshal(map[string]any{"currentEventCid": ev.ContractID})
-	_, err = s.ledger.SubmitAndWait(ctx(r), orgParty, "checkin-"+newID(),
+	ciResp, err := s.ledger.SubmitAndWait(ctx(r), orgParty, "checkin-"+newID(),
 		[]ledger.Command{{ExerciseCommand: &ledger.ExerciseCommand{
 			TemplateID:     s.pkg.TemplateID(ledger.TplStakedRSVP),
 			ContractID:     rv.RSVPCID,
@@ -598,7 +602,7 @@ func (s *Server) handleCheckin(w http.ResponseWriter, r *http.Request) {
 		writeErr502(w, "checkin", rv.RSVPCID, err)
 		return
 	}
-	s.respondRSVP(w, r, eventID, attendeeParty)
+	s.respondRSVP(w, r, eventID, attendeeParty, ciResp.TxID())
 }
 
 // POST /api/events/{eventId}/close — runs §4 → §5 → §6. Organizer-only.
@@ -710,7 +714,15 @@ func (s *Server) handleSettlement(w http.ResponseWriter, r *http.Request) {
 // ---- helpers ----
 
 // respondRSVP re-reads and returns the current rsvps row for (event, attendee).
-func (s *Server) respondRSVP(w http.ResponseWriter, r *http.Request, eventID, attendeeParty string) {
+// An optional txID is the update id of the ledger write that just happened —
+// variadic so the read-only callers stay untouched. It is surfaced immediately
+// rather than stored: the indexer records update ids for settlements only, and
+// showing it at the moment of the action is what makes the movement visible.
+func (s *Server) respondRSVP(w http.ResponseWriter, r *http.Request, eventID, attendeeParty string, txID ...string) {
+	tx := ""
+	if len(txID) > 0 {
+		tx = txID[0]
+	}
 	rv, err := s.store.GetRSVP(ctx(r), eventID, attendeeParty)
 	if errors.Is(err, store.ErrNotFound) {
 		// The indexer may not have landed the projection yet; return a minimal
@@ -719,6 +731,7 @@ func (s *Server) respondRSVP(w http.ResponseWriter, r *http.Request, eventID, at
 			"eventId":       eventID,
 			"attendeeParty": attendeeParty,
 			"status":        "pending",
+			"txId":          tx,
 		})
 		return
 	}
@@ -735,6 +748,7 @@ func (s *Server) respondRSVP(w http.ResponseWriter, r *http.Request, eventID, at
 		"inviteCid":     rv.InviteCID,
 		"rsvpCid":       rv.RSVPCID,
 		"allocationCid": rv.AllocationCID,
+		"txId":          tx,
 	})
 }
 

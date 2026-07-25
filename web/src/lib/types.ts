@@ -167,6 +167,7 @@ export interface DiscoverRow {
 // (rows render name/email — 08 §2) and their Canton party (check-in posts
 // {attendeeParty} — 05 §2).
 export interface OrganizerRsvpRow {
+  txId?: string; // set on the check-in response; see MyRsvp.txId
   attendeeParty: string;
   attendeeName?: string;
   attendeeEmail?: string;
@@ -188,6 +189,10 @@ export interface MyRsvp {
   checkedIn: boolean;
   inviteCid?: string;
   rsvpCid?: string;
+  // Update id of the ledger write this response is the result of (stake,
+  // check-in). Present only on action responses, never on plain reads — the
+  // point is to show the transaction at the moment it happens.
+  txId?: string;
 }
 
 // GET /api/events/{eventId} — role-adaptive union.

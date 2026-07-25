@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { api } from "@/lib/api";
+import { txToast } from "@/lib/txToast";
 import { useToast } from "../ToastProvider";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,8 +54,10 @@ export function ScanCheckin({
       seenRef.current.add(party);
       setBusy(true);
       try {
-        await api.checkin(eventId, party);
-        push({ kind: "success", message: `Checked in: ${party.split("::")[0] || "attendee"} ✓` });
+        const res = await api.checkin(eventId, party);
+        push(
+          txToast(`Checked in: ${party.split("::")[0] || "attendee"}`, res?.txId),
+        );
         onMutate();
       } catch (err) {
         seenRef.current.delete(party); // allow retry

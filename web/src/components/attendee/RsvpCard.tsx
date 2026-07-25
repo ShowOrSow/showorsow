@@ -10,6 +10,7 @@ import type {
   User,
 } from "@/lib/types";
 import { tokenLabelOf } from "@/lib/format";
+import { txToast } from "@/lib/txToast";
 import { TokenLogo } from "../TokenLogo";
 import { CheckinPass } from "./CheckinPass";
 import { useToast } from "../ToastProvider";
@@ -69,8 +70,10 @@ export function RsvpCard({
     setOutcome("pending");
     setBusy(true);
     try {
-      await fn();
+      const res = await fn();
       setOutcome("done");
+      // The stake is a real registry allocation — show the receipt for it.
+      push(txToast("Stake locked in escrow", res?.txId));
       onMutate();
       setTimeout(() => setStepping(false), 900);
     } catch (err) {
