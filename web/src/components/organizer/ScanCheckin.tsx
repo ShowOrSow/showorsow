@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import jsQR from "jsqr";
 import { api } from "@/lib/api";
 import { useToast } from "../ToastProvider";
 import { Button } from "@/components/ui/button";
@@ -13,10 +14,11 @@ import {
 import { ScanLine, CameraOff } from "lucide-react";
 
 // ScanCheckin — organizer door scanner. Reads the attendee's CheckinPass QR
-// (`SOS1|eventId|attendeeParty`) via camera + BarcodeDetector and fires the
-// same POST /checkin as the manual list. BarcodeDetector is Chromium-only, so
-// a paste-the-code fallback is always shown; check-in authority stays with the
-// organizer session either way.
+// (`SOS1|eventId|attendeeParty`) from the camera and fires the same POST
+// /checkin as the manual list. Decoding falls back from the native
+// BarcodeDetector to jsQR so it works on every platform with a camera (see the
+// effect below). The paste-the-code box stays as a keyboard path; check-in
+// authority is the organizer's session either way, never the QR.
 export function ScanCheckin({
   eventId,
   disabled,
@@ -64,13 +66,25 @@ export function ScanCheckin({
     [busy, eventId, onMutate, pushError, push],
   );
 
-  // Camera + BarcodeDetector loop while the dialog is open.
+  // Camera + decode loop while the dialog is open.
+  //
+  // Two decoders. BarcodeDetector is native and cheap, but Chrome only ships it
+  // where the OS provides the barcode API — Android, ChromeOS, macOS. On
+  // Windows and Linux Chrome it does not exist at ANY version, and Safari has
+  // never had it, so the organizer's laptop and every iPhone fell straight
+  // through to the paste box. jsQR decodes the same frames in JS, so scanning
+  // works everywhere a camera does; native is still preferred when present.
   useEffect(() => {
     if (!open) return;
     let raf = 0;
     let cancelled = false;
 
     async function start() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraState("unavailable");
+        return;
+      }
+
       const Detector = (
         window as unknown as {
           BarcodeDetector?: new (o: { formats: string[] }) => {
@@ -78,10 +92,7 @@ export function ScanCheckin({
           };
         }
       ).BarcodeDetector;
-      if (!Detector || !navigator.mediaDevices?.getUserMedia) {
-        setCameraState("unavailable");
-        return;
-      }
+
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "environment" },
@@ -96,19 +107,45 @@ export function ScanCheckin({
           await videoRef.current.play();
         }
         setCameraState("on");
-        const detector = new Detector({ formats: ["qr_code"] });
+
+        const detector = Detector ? new Detector({ formats: ["qr_code"] }) : null;
+        // Reused across frames — allocating a canvas per frame would thrash.
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+
+        const scanWithJsQr = (video: HTMLVideoElement): string | null => {
+          if (!ctx || !video.videoWidth) return null;
+          // Downscale: jsQR is O(pixels) and a 640px-wide frame decodes a
+          // phone-screen QR fine while keeping the loop at frame rate.
+          const w = Math.min(640, video.videoWidth);
+          const h = Math.round((video.videoHeight / video.videoWidth) * w);
+          canvas.width = w;
+          canvas.height = h;
+          ctx.drawImage(video, 0, 0, w, h);
+          const found = jsQR(ctx.getImageData(0, 0, w, h).data, w, h, {
+            inversionAttempts: "dontInvert",
+          });
+          return found?.data ?? null;
+        };
+
         const tick = async () => {
           if (cancelled || !videoRef.current) return;
           try {
-            const codes = await detector.detect(videoRef.current);
-            for (const c of codes) void handlePayload(c.rawValue);
+            if (detector) {
+              const codes = await detector.detect(videoRef.current);
+              for (const c of codes) void handlePayload(c.rawValue);
+            } else {
+              const raw = scanWithJsQr(videoRef.current);
+              if (raw) void handlePayload(raw);
+            }
           } catch {
-            /* detector hiccups between frames are normal */
+            /* decoder hiccups between frames are normal */
           }
           raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
       } catch {
+        // Permission denied, or no camera attached.
         setCameraState("unavailable");
       }
     }
@@ -155,8 +192,8 @@ export function ScanCheckin({
             <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-accent/30 p-6 text-center">
               <CameraOff className="size-6 text-faint" />
               <p className="text-sm text-muted-foreground">
-                Camera scanning isn&apos;t available in this browser — paste the
-                pass code instead.
+                No camera available — allow camera access for this site, or
+                paste the pass code below.
               </p>
             </div>
           )}
