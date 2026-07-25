@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
+import { use, useEffect, useState } from "react";
 import useSWR from "swr";
 import type { EventDetail, SettlementPackage } from "@/lib/types";
 import { isOrganizerDetail } from "@/lib/types";
+import { ApiError } from "@/lib/api";
 import { CountdownChip } from "@/components/CountdownChip";
 import {
   EventCover,
@@ -32,6 +33,15 @@ export default function EventDetailPage({
     refreshInterval: 2000,
   });
 
+  // Grace window for the "still indexing" state above. Without a ceiling a
+  // genuinely missing event would spin forever instead of reporting an error.
+  const [settlingTimedOut, setSettlingTimedOut] = useState(false);
+  useEffect(() => {
+    if (data) return;
+    const t = setTimeout(() => setSettlingTimedOut(true), 30_000);
+    return () => clearTimeout(t);
+  }, [data]);
+
   const settled = data?.event.status === "settled";
   const { data: settlement } = useSWR<SettlementPackage>(
     settled ? `${key}/settlement` : null,
@@ -51,7 +61,29 @@ export default function EventDetailPage({
     );
   }
 
-  if (error || !data) {
+  // A just-created event 404s until the indexer projects its contract, and the
+  // create form redirects here the moment the ledger write returns — so the
+  // organizer used to land on "Could not load this event" and have to refresh.
+  // SWR is already re-polling every 2s; this only stops the error card from
+  // claiming failure while the read model is still catching up. Applies to any
+  // entry path (shared links included), not just the redirect, and a fixed
+  // delay in the form would not: indexer lag is not a constant.
+  if (error && !data) {
+    const notFoundYet = error instanceof ApiError && error.status === 404;
+    if (notFoundYet && !settlingTimedOut) {
+      return (
+        <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-line bg-surface px-6 py-16 text-center">
+            <span className="size-6 animate-spin rounded-full border-2 border-line border-t-refund" />
+            <p className="font-medium text-text">Settling on the ledger…</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              The event is committed. Waiting for the read model to catch up —
+              this page will fill in on its own.
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
         <div className="rounded-2xl border border-slash/30 bg-surface p-6">
@@ -60,6 +92,14 @@ export default function EventDetailPage({
             ← Back to events
           </Link>
         </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+        <div className="h-64 animate-pulse rounded-2xl border border-line bg-surface" />
       </div>
     );
   }

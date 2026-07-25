@@ -7,11 +7,12 @@ import { ArrowLeft, ExternalLink, Lock, RefreshCcw, Send, Flame } from "lucide-r
 
 // /proof — the DevNet receipts page.
 //
-// Why this page exists: the live demo runs against a self-contained Canton
-// sandbox so judges can click through without a wallet or test tokens. The
-// bounty-relevant work happened on the SHARED hackcanton-01 DevNet with REAL
-// cBTC and cETH, and those runs only exist as ledger transactions. This page
-// puts the receipts where anyone can check them, rather than asking for trust.
+// Why this page exists: the hosted demo talks to the SHARED hackcanton-01 DevNet
+// with REAL cBTC and cETH (see /api/tokens — the instrument admins are BitSafe's
+// cbtc-network and onRails' rails-cethMain-1-dev), so staking there moves real
+// registry holdings. Those movements only exist as ledger transactions, and a
+// judge cannot see someone else's. This page puts the receipts for complete
+// cycles where anyone can check them, rather than asking for trust.
 //
 // Every id below came out of a submit-and-wait response during the runs; the
 // balances are the end state we read back from the ledger afterwards.
@@ -103,12 +104,15 @@ export default function ProofPage() {
           Receipts from Canton DevNet
         </h1>
         <p className="max-w-2xl text-muted-foreground">
-          The demo you just clicked through runs on a self-contained Canton
-          sandbox, so nobody needs a wallet or test tokens to try it. The runs
-          below are different: they happened on the shared{" "}
-          <span className="mono text-text">hackcanton-01</span> DevNet with{" "}
-          <strong className="text-text">real cBTC and real cETH</strong>. Each
-          line is a transaction id you can look up on that node.
+          The demo you just clicked through is{" "}
+          <strong className="text-text">not a sandbox</strong>. It runs against
+          the shared <span className="mono text-text">hackcanton-01</span>{" "}
+          DevNet, staking{" "}
+          <strong className="text-text">real cBTC and real cETH</strong> issued
+          by BitSafe and onRails — the demo accounts are parties the node
+          operator provisioned, which is why signup is closed. The runs below are
+          complete event cycles on that node; each line is a transaction id you
+          can look up there.
         </p>
         <p className="rounded-xl border border-line bg-accent/40 p-4 text-sm leading-relaxed text-muted-foreground">
           The point worth noticing: the two runs are the{" "}
