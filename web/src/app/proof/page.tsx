@@ -161,6 +161,29 @@ export default function ProofPage() {
           and <span className="mono text-xs text-text">showorsow-demo-token</span>{" "}
           (50bdca9c…).
         </p>
+
+        <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
+          There is deliberately{" "}
+          <strong className="text-text">no public explorer link</strong> to give
+          you here. Canton shows a transaction only to its informees — if a
+          stranger could open someone&apos;s stake in a browser, the privacy this
+          project is built on would not exist. So verification is a query you run
+          against the participant, with your own token:
+        </p>
+        <pre className="mono mt-3 overflow-x-auto rounded-xl border border-line bg-ink p-4 text-[11px] leading-relaxed text-text">
+{`curl -X POST \\
+  https://ledger-api-json.participant.hackcanton-01.devnet.naas.noders.services/v2/updates/update-by-id \\
+  -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" \\
+  -d '{"updateId":"<any id above>",
+       "updateFormat":{"includeTransactions":{"eventFormat":
+         {"filtersByParty":{},"filtersForAnyParty":{},"verbose":true},
+        "transactionShape":"TRANSACTION_SHAPE_ACS_DELTA"}}}'`}
+        </pre>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Run it as one of our parties and you get the transaction back; run it
+          as an unrelated party and you get nothing — which is the guarantee, not
+          a failure.
+        </p>
         <div className="mt-4 flex flex-wrap gap-3">
           <Button asChild variant="outline" className="rounded-full border-line">
             <a
