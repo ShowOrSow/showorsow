@@ -275,7 +275,11 @@ export default function Home() {
 // NEXT_PUBLIC_DEMO_VIDEO_URL is set (YouTube/Loom share URL); until then it
 // shows a placeholder that links to the live demo instead of a dead frame.
 function DemoVideo() {
-  const url = process.env.NEXT_PUBLIC_DEMO_VIDEO_URL;
+  // Hardcoded default rather than env-only: the video exists, and gating the
+  // section behind a Vercel setting is one more thing to forget.
+  const url =
+    process.env.NEXT_PUBLIC_DEMO_VIDEO_URL ||
+    "https://www.youtube.com/embed/LaLJ62v8C-k";
   if (url) {
     return (
       <div className="overflow-hidden rounded-3xl border border-line bg-ink shadow-[0_18px_50px_-30px_rgba(16,24,32,0.4)]">

@@ -10,7 +10,8 @@ Stake to RSVP. Show up and get it back. Ghosts fund the people who came.</p>
 > The logo is the pitch: your stake is a **seed**, planted below the ticket's perforation line the moment you RSVP. Show up — you harvest it back, plus a share of the pot. Ghost — your seed still grows, **but the people who came harvest it.**
 
 <p align="center">
-  <a href="https://showorsow.vercel.app"><b>▶ Live demo</b></a> ·
+  <a href="https://youtu.be/LaLJ62v8C-k"><b>▶ Watch the 3-min demo</b></a> ·
+  <a href="https://showorsow.vercel.app"><b>Live app</b></a> ·
   <a href="https://showorsow.vercel.app/proof"><b>DevNet transaction receipts</b></a>
 </p>
 
