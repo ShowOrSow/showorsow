@@ -38,7 +38,12 @@ export default function EventDetailPage({
   const [settlingTimedOut, setSettlingTimedOut] = useState(false);
   useEffect(() => {
     if (data) return;
-    const t = setTimeout(() => setSettlingTimedOut(true), 30_000);
+    // Generous: the indexer runs in poll mode and restarts periodically to
+    // refresh its JWT, so projecting a brand-new event has taken well over 30s.
+    // SWR keeps retrying every 2s regardless — this only decides when we stop
+    // believing the event is coming, and calling an event that plainly exists
+    // "could not load" is far worse than waiting a little longer.
+    const t = setTimeout(() => setSettlingTimedOut(true), 180_000);
     return () => clearTimeout(t);
   }, [data]);
 

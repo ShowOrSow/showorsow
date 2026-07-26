@@ -106,7 +106,7 @@ export function EventForm() {
           />
           {token && (
             <span className="whitespace-nowrap text-sm text-muted-foreground">
-              {token.label} · {token.decimals} dp
+              {token.label}
             </span>
           )}
         </div>
