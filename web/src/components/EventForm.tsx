@@ -25,6 +25,7 @@ export function EventForm() {
   const [rsvpDeadline, setRsvpDeadline] = useState("");
   const [eventEnd, setEventEnd] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [waiting, setWaiting] = useState(false);
 
   const valid =
     title.trim() &&
@@ -49,9 +50,16 @@ export function EventForm() {
         eventEnd: toIsoFromLocalInput(eventEnd),
       });
       push(txToast("Event created on the ledger", txId));
+      // The ledger write has committed, but the read model has not caught up —
+      // the indexer polls, so a brand-new event is not queryable for a few
+      // seconds and the detail page would open onto "could not load". Hold here
+      // instead of handing the organizer a page that has to recover.
+      setWaiting(true);
+      await new Promise((r) => setTimeout(r, 10_000));
       router.push(`/events/${encodeURIComponent(eventId)}`);
     } catch (err) {
       pushError(err, "Could not create event");
+      setWaiting(false);
       setSubmitting(false);
     }
   }
@@ -146,7 +154,11 @@ export function EventForm() {
           disabled={!valid || submitting}
           className="rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-ink hover:brightness-95 disabled:opacity-50"
         >
-          {submitting ? "Creating…" : "Create Event"}
+          {waiting
+            ? "Settling on the ledger…"
+            : submitting
+              ? "Creating…"
+              : "Create Event"}
         </button>
         <button
           type="button"
